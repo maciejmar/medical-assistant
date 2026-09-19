@@ -1,0 +1,9 @@
+# Dopisz do Caddyfile na serwerze i przeładuj: sudo systemctl reload caddy
+# Nginx w kontenerze frontendu sam przekazuje /api do backendu (z wyłączonym buforowaniem SSE).
+logoped.twoja-domena.pl {
+  encode zstd gzip
+
+  reverse_proxy 127.0.0.1:8081 {
+    flush_interval -1
+  }
+}

@@ -1,0 +1,73 @@
+name: logoped-assist
+
+# Wersja produkcyjna: obrazy z GHCR, sekrety z pliku /opt/logoped-assist.env na serwerze.
+# Na hosta wystawione tylko 127.0.0.1 – ruch publiczny obsługuje reverse proxy (Caddy).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lg_postgres
+    restart: unless-stopped
+    env_file:
+      - /opt/logoped-assist.env
+    volumes:
+      - lg_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [logoped_net]
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    container_name: lg_qdrant
+    restart: unless-stopped
+    volumes:
+      - lg_qdrant_data:/qdrant/storage
+    networks: [logoped_net]
+
+  backend:
+    image: ghcr.io/maciejmar/logoped-assist-backend:latest
+    container_name: lg_backend
+    restart: unless-stopped
+    env_file:
+      - /opt/logoped-assist.env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      HF_HOME: /models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    volumes:
+      - lg_model_cache:/models
+    ports:
+      - "127.0.0.1:8002:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks: [logoped_net]
+
+  frontend:
+    image: ghcr.io/maciejmar/logoped-assist-frontend:latest
+    container_name: lg_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8081:80"
+    networks: [logoped_net]
+
+networks:
+  logoped_net:
+    driver: bridge
+
+volumes:
+  lg_pg_data:
+  lg_qdrant_data:
+  lg_model_cache:
