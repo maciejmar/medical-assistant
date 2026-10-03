@@ -34,6 +34,10 @@ services:
     env_file:
       - /opt/logoped-assist.env
     environment:
+      # DB_URL budowany z POSTGRES_* tak samo jak w docker-compose.yml (dev) – nie trzeba go
+      # osobno wpisywać w pliku .env na serwerze. Wymaga uruchamiania compose z flagą
+      # --env-file /opt/logoped-assist.env (patrz .github/workflows/deploy.yml).
+      DB_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       QDRANT_URL: http://qdrant:6333
       HF_HOME: /models
     depends_on:

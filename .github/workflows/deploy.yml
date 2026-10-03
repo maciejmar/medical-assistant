@@ -74,6 +74,6 @@ jobs:
             sudo cp /home/${{ secrets.SSH_USER }}/logoped-assist/docker-compose.prod.yml /opt/logoped-assist/docker-compose.yml
             cd /opt/logoped-assist
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-            docker compose pull
-            docker compose up -d
+            docker compose --env-file /opt/logoped-assist.env pull
+            docker compose --env-file /opt/logoped-assist.env up -d
             docker image prune -f
