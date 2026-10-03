@@ -39,7 +39,7 @@ docker compose up --build
 - Token JWT jest przechowywany w `localStorage`. Przy publicznym wystawieniu aplikacji zalecane są HTTPS, polityka CSP
   i limit prób logowania na reverse proxy.
 
-## Testy ##
+## Testy 
 
 ```bash
 cd backend  && uv sync && uv run ruff check src tests && uv run pytest
