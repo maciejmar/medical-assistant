@@ -70,8 +70,8 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
-            sudo mkdir -p /opt/logoped-assist
-            sudo cp /home/${{ secrets.SSH_USER }}/logoped-assist/docker-compose.prod.yml /opt/logoped-assist/docker-compose.yml
+            mkdir -p /opt/logoped-assist
+            cp /home/${{ secrets.SSH_USER }}/logoped-assist/docker-compose.prod.yml /opt/logoped-assist/docker-compose.yml
             cd /opt/logoped-assist
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             docker compose --env-file /opt/logoped-assist.env pull
