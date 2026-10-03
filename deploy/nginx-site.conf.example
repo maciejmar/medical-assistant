@@ -1,20 +1,25 @@
-# Zapisz na serwerze jako /etc/nginx/sites-available/logoped-assist, podlinkuj do sites-enabled:
-#   sudo ln -s /etc/nginx/sites-available/logoped-assist /etc/nginx/sites-enabled/
+# Wzorowane na /etc/nginx/sites-available/office-assistant.webaby.io na tym serwerze:
+# host nginx kieruje ruch bezpośrednio do portów opublikowanych przez kontenery
+# (frontend 8081, backend 8092), bez pośredniczenia kontenera frontendu w /api.
+#
+# DNS wymagany: logopeda-assist.webaby.io -> adres IP tego serwera
+# Zapisz jako /etc/nginx/sites-available/logopeda-assist.webaby.io, potem:
+#   sudo ln -s /etc/nginx/sites-available/logopeda-assist.webaby.io /etc/nginx/sites-enabled/
 #   sudo nginx -t && sudo systemctl reload nginx
-# Certyfikat HTTPS (wymagany dla mikrofonu w przeglądarce):
-#   sudo certbot --nginx -d logoped.twoja-domena.pl
-# Certbot sam dopisze blok listen 443 ssl oraz przekierowanie z 80.
+#   sudo certbot --nginx -d logopeda-assist.webaby.io
+# Certbot sam dopisze blok listen 443 ssl i przekierowanie z portu 80 (tak jak w innych
+# plikach w sites-available na tym serwerze).
 
 server {
     listen 80;
-    server_name logoped.twoja-domena.pl;
+    listen [::]:80;
+    server_name logopeda-assist.webaby.io;
 
     # Nagrania audio z dyktowania (backend dopuszcza do 25 MB)
     client_max_body_size 30m;
 
-    location / {
-        # Kontener frontendu (nginx) sam serwuje SPA i przekazuje /api do backendu
-        proxy_pass http://127.0.0.1:8081;
+    location /api/ {
+        proxy_pass http://127.0.0.1:8092;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -22,10 +27,20 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Connection "";
 
-        # Czat działa przez Server-Sent Events: bez buforowania i z długim timeoutem
+        # Czat odpowiada strumieniowo przez Server-Sent Events – bez tego nginx
+        # buforowałby całą odpowiedź i pokazywał ją dopiero na końcu generowania
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
