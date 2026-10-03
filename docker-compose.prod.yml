@@ -1,7 +1,7 @@
 name: logoped-assist
 
 # Wersja produkcyjna: obrazy z GHCR, sekrety z pliku /opt/logoped-assist.env na serwerze.
-# Na hosta wystawione tylko 127.0.0.1 – ruch publiczny obsługuje reverse proxy (Caddy).
+# Na hosta wystawione tylko 127.0.0.1 – ruch publiczny obsługuje reverse proxy (nginx na hoście).
 
 services:
   postgres:
