@@ -34,16 +34,18 @@
      dzięki czemu można precyzyjnie zarezerwować pod nie miejsce paddingiem kontenera) */
   .page-bg-dashboard {
     background-image: url('assets/images/logoped-monochrome.png');
-    @apply bg-[length:auto_110px] bg-left-bottom bg-no-repeat rounded-2xl;
+    @apply bg-[length:auto_127px] bg-left-bottom bg-no-repeat rounded-2xl;
   }
   .page-bg-assistant {
     background-image: url('assets/images/logoped-sepia.png');
-    @apply bg-[length:auto_110px] bg-left-bottom bg-no-repeat rounded-2xl;
+    @apply bg-[length:auto_127px] bg-left-bottom bg-no-repeat rounded-2xl;
   }
 
-  /* Karty prawie nieprzezroczyste – tylko lekki (10%) prześwit */
+  /* Karty prawie nieprzezroczyste (10% prześwitu), w ciepłym, kremowym odcieniu
+     z nutą czerwieni i brązu (delikatna terakota) – odróżniają się od tła */
   .page-bg-dashboard .card,
   .page-bg-assistant .card {
-    @apply bg-white/90 backdrop-blur-sm;
+    background-color: rgba(243, 224, 210, 0.9);
+    @apply backdrop-blur-sm;
   }
 }
