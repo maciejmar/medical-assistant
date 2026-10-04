@@ -30,21 +30,27 @@
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
   }
 
-  /* Karty na tych dwóch stronach: łagodny gradient w ciepłej, kremowo-terakotowej tonacji */
-  .page-bg-dashboard .card,
-  .page-bg-assistant .card {
-    background-image: linear-gradient(135deg, rgba(250, 238, 228, 0.92) 0%, rgba(235, 209, 191, 0.88) 100%);
-    @apply backdrop-blur-sm;
+  /* Tło na cały ekran – position: fixed + inset: 0 sprawia, że zawsze wypełnia całe okno
+     przeglądarki niezależnie od wysokości treści strony (i nie wpływa na jej układ/scroll) */
+  .page-bg-dashboard,
+  .page-bg-assistant {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    @apply bg-cover bg-center;
   }
-
-  /* Baner ze zdjęciem na górze karty, na pełną jej szerokość (równo z krawędziami karty) */
-  .card-banner {
-    @apply h-28 rounded-t-xl bg-cover bg-center;
-  }
-  .card-banner-dashboard {
+  .page-bg-dashboard {
     background-image: url('assets/images/logoped-monochrome.png');
   }
-  .card-banner-assistant {
+  .page-bg-assistant {
     background-image: url('assets/images/logoped-sepia.png');
+  }
+
+  /* Karty na tych dwóch stronach: łagodny gradient w ciepłej, kremowo-terakotowej tonacji,
+     żeby odróżniały się od pełnoekranowego zdjęcia pod spodem */
+  .dashboard-page .card,
+  .assistant-page .card {
+    background-image: linear-gradient(135deg, rgba(250, 238, 228, 0.92) 0%, rgba(235, 209, 191, 0.88) 100%);
+    @apply backdrop-blur-sm;
   }
 }

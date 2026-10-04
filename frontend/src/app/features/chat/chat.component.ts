@@ -45,9 +45,10 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
   imports: [FormsModule, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <div class="assistant-page">
+    <div class="page-bg-assistant"></div>
     <div class="grid gap-4 lg:grid-cols-[16rem_1fr]">
       <aside class="card h-fit lg:sticky lg:top-20">
-        <div class="card-banner card-banner-assistant -m-4 mb-4 sm:-m-6 sm:mb-6"></div>
         <button type="button" class="btn-primary mb-3 w-full" (click)="newConversation()">Nowa rozmowa</button>
         <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Historia</h2>
         @if (conversations().length === 0) {
@@ -72,7 +73,6 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
       </aside>
 
       <section class="card flex min-h-[70vh] flex-col !p-0">
-        <div class="card-banner card-banner-assistant"></div>
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div class="flex items-center gap-2">
             <label class="text-xs font-semibold uppercase text-slate-500" for="patient">Pacjent</label>
@@ -166,6 +166,7 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
           </p>
         </form>
       </section>
+    </div>
     </div>
   `,
 })
