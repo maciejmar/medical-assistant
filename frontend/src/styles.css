@@ -43,4 +43,10 @@
       url('assets/images/logoped-sepia.png');
     @apply bg-cover bg-top bg-fixed rounded-2xl;
   }
+
+  /* Karty na tle zdjęcia mają przenikać, a nie całkowicie je zasłaniać */
+  .page-bg-dashboard .card,
+  .page-bg-assistant .card {
+    @apply border-white/60 bg-white/75 backdrop-blur-md;
+  }
 }
