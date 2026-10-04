@@ -41,6 +41,7 @@
   }
   .page-bg-dashboard {
     background-image: url('assets/images/logoped-monochrome.png');
+    transform: scale(0.9); /* o 10% mniejszy niż pełny ekran */
   }
   .page-bg-assistant {
     background-image: url('assets/images/logoped-sepia.png');
