@@ -13,6 +13,7 @@ import { ageFromBirthDate, emptyToNull } from '../../shared/utils';
   imports: [ReactiveFormsModule, RouterLink, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <div class="page-bg-dashboard p-4 sm:p-6">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold">Dzień dobry, {{ auth.user()?.full_name }}</h1>
@@ -123,6 +124,7 @@ import { ageFromBirthDate, emptyToNull } from '../../shared/utils';
           </ul>
         }
       </section>
+    </div>
     </div>
   `,
 })
