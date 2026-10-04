@@ -50,6 +50,9 @@
      żeby odróżniały się od pełnoekranowego zdjęcia pod spodem */
   .dashboard-page .card,
   .assistant-page .card {
+    /* .card ustawia bg-white (w pełni nieprzezroczyste) – trzeba je jawnie wyzerować,
+       inaczej gradient maluje się na wierzchu białego tła zamiast przebijać do strony */
+    background-color: transparent;
     background-image: linear-gradient(135deg, rgba(250, 238, 228, 0.5) 0%, rgba(235, 209, 191, 0.5) 100%);
     @apply backdrop-blur-sm;
   }
