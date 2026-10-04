@@ -30,14 +30,15 @@
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
   }
 
-  /* Małe grafiki w lewym dolnym rogu (ok. 1/4 szerokości kontenera), bez powtarzania */
+  /* Małe grafiki w lewym dolnym rogu – stały rozmiar w px (niezależny od szerokości ekranu,
+     dzięki czemu można precyzyjnie zarezerwować pod nie miejsce paddingiem kontenera) */
   .page-bg-dashboard {
     background-image: url('assets/images/logoped-monochrome.png');
-    @apply bg-[length:25%_auto] bg-left-bottom bg-no-repeat rounded-2xl;
+    @apply bg-[length:auto_110px] bg-left-bottom bg-no-repeat rounded-2xl;
   }
   .page-bg-assistant {
     background-image: url('assets/images/logoped-sepia.png');
-    @apply bg-[length:25%_auto] bg-left-bottom bg-no-repeat rounded-2xl;
+    @apply bg-[length:auto_110px] bg-left-bottom bg-no-repeat rounded-2xl;
   }
 
   /* Karty prawie nieprzezroczyste – tylko lekki (10%) prześwit */
