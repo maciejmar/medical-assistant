@@ -30,23 +30,25 @@
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
   }
 
-  /* Tła stron: zdjęcie + przejście tonalne w kolorach marki, żeby karty nad nim zostały czytelne */
+  /* Tła stron: zdjęcie + przejście tonalne w kolorach marki, żeby karty nad nim zostały czytelne.
+     Uwaga: celowo BEZ bg-fixed – przy "fixed" rozmiar "cover" liczy się względem całego okna
+     przeglądarki, a nie tego kontenera, przez co widać tylko przypadkowy wycinek obrazka. */
   .page-bg-dashboard {
     background-image:
-      linear-gradient(180deg, rgba(239, 250, 248, 0.55) 0%, rgba(255, 255, 255, 0.92) 60%, #ffffff 100%),
+      linear-gradient(180deg, rgba(239, 250, 248, 0.2) 0%, rgba(255, 255, 255, 0.55) 65%, rgba(255, 255, 255, 0.85) 100%),
       url('assets/images/logoped-background.png');
-    @apply bg-cover bg-top bg-fixed rounded-2xl;
+    @apply bg-cover bg-center rounded-2xl;
   }
   .page-bg-assistant {
     background-image:
-      linear-gradient(180deg, rgba(29, 68, 66, 0.6) 0%, rgba(255, 255, 255, 0.55) 45%, rgba(255, 255, 255, 0.93) 100%),
+      linear-gradient(180deg, rgba(29, 68, 66, 0.35) 0%, rgba(255, 255, 255, 0.3) 45%, rgba(255, 255, 255, 0.82) 100%),
       url('assets/images/logoped-sepia.png');
-    @apply bg-cover bg-top bg-fixed rounded-2xl;
+    @apply bg-cover bg-center rounded-2xl;
   }
 
   /* Karty na tle zdjęcia mają przenikać, a nie całkowicie je zasłaniać */
   .page-bg-dashboard .card,
   .page-bg-assistant .card {
-    @apply border-white/60 bg-white/75 backdrop-blur-md;
+    @apply border-white/60 bg-white/60 backdrop-blur-md;
   }
 }
