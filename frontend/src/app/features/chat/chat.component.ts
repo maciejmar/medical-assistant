@@ -45,7 +45,7 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
   imports: [FormsModule, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="page-bg-assistant grid min-h-[85vh] gap-4 rounded-2xl p-4 pb-40 sm:pb-56 lg:grid-cols-[16rem_1fr]">
+    <div class="page-bg-assistant grid gap-4 rounded-2xl p-4 lg:grid-cols-[16rem_1fr]">
       <aside class="card h-fit lg:sticky lg:top-20">
         <button type="button" class="btn-primary mb-3 w-full" (click)="newConversation()">Nowa rozmowa</button>
         <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Historia</h2>
