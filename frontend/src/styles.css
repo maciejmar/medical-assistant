@@ -38,7 +38,7 @@
        pokazuje obrazek bez żadnej nakładki */
     background-image:
       linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.5) 25%, rgba(255, 255, 255, 0) 55%),
-      url('assets/images/logoped-background.png');
+      url('assets/images/logoped-monochrome.png');
     @apply bg-cover bg-bottom rounded-2xl;
   }
   .page-bg-assistant {
