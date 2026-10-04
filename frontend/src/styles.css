@@ -30,22 +30,21 @@
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
   }
 
-  /* Małe grafiki w lewym dolnym rogu – stały rozmiar w px (niezależny od szerokości ekranu,
-     dzięki czemu można precyzyjnie zarezerwować pod nie miejsce paddingiem kontenera) */
-  .page-bg-dashboard {
-    background-image: url('assets/images/logoped-monochrome.png');
-    @apply bg-[length:auto_127px] bg-left-bottom bg-no-repeat rounded-2xl;
-  }
-  .page-bg-assistant {
-    background-image: url('assets/images/logoped-sepia.png');
-    @apply bg-[length:auto_127px] bg-left-bottom bg-no-repeat rounded-2xl;
-  }
-
-  /* Karty prawie nieprzezroczyste (10% prześwitu), z łagodnym gradientem w ciepłej,
-     kremowo-terakotowej tonacji – odróżniają się od tła i mają subtelną głębię */
+  /* Karty na tych dwóch stronach: łagodny gradient w ciepłej, kremowo-terakotowej tonacji */
   .page-bg-dashboard .card,
   .page-bg-assistant .card {
     background-image: linear-gradient(135deg, rgba(250, 238, 228, 0.92) 0%, rgba(235, 209, 191, 0.88) 100%);
     @apply backdrop-blur-sm;
+  }
+
+  /* Baner ze zdjęciem na górze karty, na pełną jej szerokość (równo z krawędziami karty) */
+  .card-banner {
+    @apply h-28 rounded-t-xl bg-cover bg-center;
+  }
+  .card-banner-dashboard {
+    background-image: url('assets/images/logoped-monochrome.png');
+  }
+  .card-banner-assistant {
+    background-image: url('assets/images/logoped-sepia.png');
   }
 }

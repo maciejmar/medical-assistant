@@ -13,7 +13,6 @@ import { ageFromBirthDate, emptyToNull } from '../../shared/utils';
   imports: [ReactiveFormsModule, RouterLink, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="page-bg-dashboard p-4 pb-36 sm:p-6 sm:pb-36">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold">Dzień dobry, {{ auth.user()?.full_name }}</h1>
@@ -62,6 +61,7 @@ import { ageFromBirthDate, emptyToNull } from '../../shared/utils';
 
     <div class="grid gap-6 lg:grid-cols-3">
       <section class="card lg:col-span-2">
+        <div class="card-banner card-banner-dashboard -m-4 mb-4 sm:-m-6 sm:mb-6"></div>
         <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h2 class="font-semibold">Pacjenci ({{ patients().length }})</h2>
           <input
@@ -104,6 +104,7 @@ import { ageFromBirthDate, emptyToNull } from '../../shared/utils';
       </section>
 
       <section class="card">
+        <div class="card-banner card-banner-dashboard -m-4 mb-4 sm:-m-6 sm:mb-6"></div>
         <h2 class="mb-4 font-semibold">Ostatnie notatki</h2>
         @if (recent().length === 0) {
           <p class="text-sm text-slate-500">Brak ostatnich działań.</p>
@@ -124,7 +125,6 @@ import { ageFromBirthDate, emptyToNull } from '../../shared/utils';
           </ul>
         }
       </section>
-    </div>
     </div>
   `,
 })
