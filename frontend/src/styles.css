@@ -51,6 +51,6 @@
   /* Karty na tle zdjęcia mają przenikać, a nie całkowicie je zasłaniać */
   .page-bg-dashboard .card,
   .page-bg-assistant .card {
-    @apply border-white/60 bg-white/60 backdrop-blur-md;
+    @apply border-white/60 bg-white/40 backdrop-blur-md;
   }
 }
