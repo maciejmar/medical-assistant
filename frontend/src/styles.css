@@ -30,27 +30,19 @@
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
   }
 
-  /* Tła stron: zdjęcie + przejście tonalne w kolorach marki, żeby karty nad nim zostały czytelne.
-     Uwaga: celowo BEZ bg-fixed – przy "fixed" rozmiar "cover" liczy się względem całego okna
-     przeglądarki, a nie tego kontenera, przez co widać tylko przypadkowy wycinek obrazka. */
+  /* Małe grafiki w lewym dolnym rogu (ok. 1/4 szerokości kontenera), bez powtarzania */
   .page-bg-dashboard {
-    /* Biel u góry (tam, gdzie leżą karty) płynnie znika w dół – odsłonięty pas pod kartami
-       pokazuje obrazek bez żadnej nakładki */
-    background-image:
-      linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.5) 25%, rgba(255, 255, 255, 0) 55%),
-      url('assets/images/logoped-monochrome.png');
-    @apply bg-cover bg-bottom rounded-2xl;
+    background-image: url('assets/images/logoped-monochrome.png');
+    @apply bg-[length:25%_auto] bg-left-bottom bg-no-repeat rounded-2xl;
   }
   .page-bg-assistant {
-    background-image:
-      linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.5) 25%, rgba(255, 255, 255, 0) 55%),
-      url('assets/images/logoped-sepia.png');
-    @apply bg-cover bg-bottom rounded-2xl;
+    background-image: url('assets/images/logoped-sepia.png');
+    @apply bg-[length:25%_auto] bg-left-bottom bg-no-repeat rounded-2xl;
   }
 
-  /* Karty na tle zdjęcia mają przenikać, a nie całkowicie je zasłaniać */
+  /* Karty prawie nieprzezroczyste – tylko lekki (10%) prześwit */
   .page-bg-dashboard .card,
   .page-bg-assistant .card {
-    @apply border-white/60 bg-white/40 backdrop-blur-md;
+    @apply bg-white/90 backdrop-blur-sm;
   }
 }
