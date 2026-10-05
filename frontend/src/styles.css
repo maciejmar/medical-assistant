@@ -49,11 +49,11 @@ body {
   .page-bg-dashboard {
     background-image: url('assets/images/logoped-monochrome.png');
     transform: scale(1); /* o 20% mniejszy niż pełny ekran */
-    opacity: 0.2;
+    opacity: 0.1;
   }
   .page-bg-assistant {
     background-image: url('assets/images/logoped-sepia.png');
-    opacity:0.2;
+    opacity:0.1;
   }
 
   /* Karty na tych dwóch stronach: łagodny gradient w ciepłej, kremowo-terakotowej tonacji,
