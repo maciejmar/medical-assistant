@@ -47,8 +47,12 @@ body {
     @apply bg-cover bg-center;
   }
   .page-bg-dashboard {
+    /* Kontener (z reguły wyżej) ma wysokość całego ekranu; obrazek to 45% jego wysokości,
+       przyklejony do dołu, bez powtarzania */
     background-image: url('assets/images/logoped-monochrome.png');
-    transform: scale(1); /* o 20% mniejszy niż pełny ekran */
+    background-size: auto 45%;
+    background-position: bottom center;
+    background-repeat: no-repeat;
     opacity: 0.1;
   }
   .page-bg-assistant {
