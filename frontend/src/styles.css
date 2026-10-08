@@ -5,7 +5,7 @@
 /* Celowo poza @layer: gwarantuje pierwszeństwo nad klasami narzędziowymi Tailwind (np. gdyby
    gdzieś jeszcze zostało tło Tailwind) bez potrzeby !important */
 body {
-  background: linear-gradient(180deg, #1a0c4a 0%, #1f052e 100%);
+  background: linear-gradient(180deg, #c8e4dd 0%, #1f052e 100%);
   min-height: 100vh;
 }
 
