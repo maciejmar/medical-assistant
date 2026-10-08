@@ -127,7 +127,7 @@ import { ageFromBirthDate, emptyToNull } from '../../shared/utils';
       </section>
     </div>
 
-    <footer class="mt-8 flex flex-col items-center gap-3 rounded-xl bg-[#02121c] px-4 py-2.5 text-xs text-slate-300 sm:flex-row sm:justify-between">
+    <footer class="fixed inset-x-0 bottom-0 z-10 flex flex-col items-center gap-3 bg-[#02121c] px-4 py-2.5 text-xs text-slate-300 sm:flex-row sm:justify-between">
       <p>© 2026 Webaby — oprogramowanie Logoped Assist.</p>
       <div class="flex items-center gap-4">
         <a href="#" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" class="text-slate-300 transition hover:text-white">
