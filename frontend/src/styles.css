@@ -51,7 +51,8 @@ body {
        przyklejony do dołu, bez powtarzania */
     background-image: url('assets/images/logoped-monochrome.png');
     background-size: auto 45%;
-    background-position: bottom center;
+    /* Przesunięte o wysokość dolnego paska (footer), żeby go nie zasłaniał */
+    background-position: center bottom 76px;
     background-repeat: no-repeat;
     opacity: 0.1;
   }
