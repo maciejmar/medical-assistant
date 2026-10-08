@@ -47,12 +47,13 @@ body {
     @apply bg-cover bg-center;
   }
   .page-bg-dashboard {
-    /* Kontener (z reguły wyżej) ma wysokość całego ekranu; obrazek to 45% jego wysokości,
-       przyklejony do dołu, bez powtarzania */
+    /* Kontener kończy się dokładnie na górnej krawędzi paska social media (ten ma stałą
+       wysokość 48px/h-12) – dzięki temu obrazek może przykleić się do dołu BEZ marginesu
+       i zawsze trafi równo pod pasek, niezależnie od szerokości ekranu */
+    bottom: 48px;
     background-image: url('assets/images/logoped-monochrome.png');
     background-size: auto 45%;
-    /* Przesunięte o wysokość dolnego paska (footer), żeby go nie zasłaniał */
-    background-position: center bottom 76px;
+    background-position: bottom center;
     background-repeat: no-repeat;
     opacity: 0.1;
   }
