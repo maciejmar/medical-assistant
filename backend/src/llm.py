@@ -12,6 +12,7 @@ from typing import Any
 from openai import AsyncOpenAI
 from sqlmodel import col, delete
 
+from .anonymizer import anonymizer_for
 from .config import settings
 from .database import LlmCall, TokenUsage, session_factory, utcnow
 
@@ -167,6 +168,7 @@ async def chat_complete(
     max_tokens: int = 400,
 ) -> Completion:
     started = time.monotonic()
+    messages = (await anonymizer_for(user_id)).messages(messages)
     try:
         response = await client.chat.completions.create(
             model=settings.vllm_chat_model,
@@ -212,6 +214,7 @@ async def chat_stream(
 ) -> AsyncIterator[str | Usage]:
     """Zwraca kolejne fragmenty tekstu, a na końcu obiekt Usage z metrykami ze streamu vLLM."""
     started = time.monotonic()
+    messages = (await anonymizer_for(user_id)).messages(messages)
     model_name = settings.vllm_chat_model
     try:
         stream = await client.chat.completions.create(
@@ -277,6 +280,9 @@ async def embed(
     texts: list[str], *, user_id: int | None, operation: str
 ) -> tuple[list[list[float]], Usage]:
     started = time.monotonic()
+    if user_id is not None:  # treści systemowe (seeding bazy wiedzy) nie zawierają danych osób
+        anonymize = await anonymizer_for(user_id)
+        texts = [anonymize(t) for t in texts]
     request = {"input": [_clip(t) for t in texts]}
     try:
         response = await client.embeddings.create(model=settings.vllm_embedding_model, input=texts)

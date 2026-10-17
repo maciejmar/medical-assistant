@@ -51,7 +51,13 @@ docker compose up --build
   pełną treść promptów (w tym pytania lekarzy i zanonimizowany kontekst pacjenta) oraz odpowiedzi modelu. Logi starsze
   niż `LLM_LOG_RETENTION_DAYS` są usuwane przy starcie; `LLM_LOG_ENABLED=false` wyłącza zapisywanie.
 - Do zewnętrznego LLM trafia kontekst pacjenta bez imienia i nazwiska (wiek, kod ICD, rozpoznanie, opis).
-  Pole „opis” jest wolnym tekstem lekarza – nie wpisuj tam danych identyfikujących.
+- Każdy tekst wysyłany do LLM (pytanie, historia rozmowy, kontekst pacjenta, zapytanie do embeddingu) przechodzi
+  przez `backend/src/anonymizer.py`: imiona i nazwiska pacjentów lekarza (z odmianą) zastępowane są przez
+  `[IMIĘ]`/`[NAZWISKO]`, a PESEL, telefon, e-mail, adres, kod pocztowy, numer dowodu, numer konta i pełne daty –
+  odpowiednimi znacznikami. Log LLM w panelu administratora zawiera już wersję zanonimizowaną.
+- Ograniczenie: imiona osób spoza kart pacjentów (np. rodziców) wpisane wolnym tekstem nie są wykrywane.
+- Nagrania do dyktowania notatek trafiają do zewnętrznego API Whisper w oryginale (głosu nie da się
+  zanonimizować) – do pełnej ochrony danych Whisper powinien działać na własnej infrastrukturze.
 - Token JWT jest przechowywany w `localStorage`. Przy publicznym wystawieniu aplikacji zalecane są HTTPS, polityka CSP
   i limit prób logowania na reverse proxy.
 
