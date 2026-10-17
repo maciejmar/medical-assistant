@@ -59,7 +59,18 @@ async def test_doctor_cannot_access_other_doctors_patients(client, make_headers)
     assert (await client.get(f"/api/patients/{pid}", headers=headers_x)).status_code == 200
 
 
-async def test_admin_has_no_access_to_patient_data(client, make_headers):
+async def test_admin_works_as_doctor_but_sees_only_own_patients(client, make_headers):
+    doctor = await make_headers("doc@example.com")
     admin = await make_headers("admin@example.com", Role.ADMIN)
-    assert (await client.get("/api/patients", headers=admin)).status_code == 403
-    assert (await client.get("/api/chat/conversations", headers=admin)).status_code == 403
+    pid = (await client.post("/api/patients", json=PATIENT, headers=doctor)).json()["id"]
+
+    assert (await client.get("/api/patients", headers=admin)).json() == []
+    assert (await client.get(f"/api/patients/{pid}", headers=admin)).status_code == 404
+    assert (await client.get("/api/chat/conversations", headers=admin)).status_code == 200
+
+
+async def test_patient_role_has_no_access_to_doctor_endpoints(client, make_headers):
+    patient = await make_headers("p@example.com", Role.PATIENT)
+    assert (await client.get("/api/patients", headers=patient)).status_code == 403
+    assert (await client.get("/api/chat/conversations", headers=patient)).status_code == 403
+    assert (await client.get("/api/admin/users", headers=patient)).status_code == 403

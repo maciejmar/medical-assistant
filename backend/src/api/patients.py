@@ -4,7 +4,14 @@ from fastapi import APIRouter, HTTPException, Response, status
 from sqlmodel import col, delete, select
 
 from ..auth import CurrentDoctor, SessionDep
-from ..database import Patient, PatientNote, utcnow
+from ..database import (
+    Patient,
+    PatientAccount,
+    PatientNote,
+    PatientNotification,
+    Recommendation,
+    utcnow,
+)
 from .schemas import NoteIn, NoteOut, PatientIn, PatientOut, RecentNoteOut
 
 router = APIRouter(prefix="/patients", tags=["patients"])
@@ -19,6 +26,15 @@ async def get_owned_patient(session: SessionDep, patient_id: int, doctor: Curren
     if patient is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie znaleziono pacjenta")
     return patient
+
+
+async def purge_patients(session: SessionDep, patient_ids: list[int]) -> None:
+    """Usuwa pacjentów wraz z danymi zależnymi (bez commita – robi go wywołujący)."""
+    if not patient_ids:
+        return
+    for model in (PatientNote, Recommendation, PatientNotification, PatientAccount):
+        await session.exec(delete(model).where(col(model.patient_id).in_(patient_ids)))
+    await session.exec(delete(Patient).where(col(Patient.id).in_(patient_ids)))
 
 
 @router.get("", response_model=list[PatientOut])
@@ -87,12 +103,7 @@ async def update_patient(
 @router.delete("/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_patient(patient_id: int, session: SessionDep, doctor: CurrentDoctor) -> Response:
     patient = await get_owned_patient(session, patient_id, doctor)
-    await session.exec(
-        delete(PatientNote).where(
-            col(PatientNote.patient_id) == patient.id, col(PatientNote.user_id) == doctor.id
-        )
-    )
-    await session.delete(patient)
+    await purge_patients(session, [patient.id])  # type: ignore[list-item]
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

@@ -13,6 +13,7 @@ from .config import settings
 class Role(StrEnum):
     DOCTOR = "ROLE_DOCTOR"
     ADMIN = "ROLE_ADMIN"
+    PATIENT = "ROLE_PATIENT"
 
 
 def utcnow() -> datetime:
@@ -96,6 +97,79 @@ class TokenUsage(SQLModel, table=True):
     prompt_tokens: int = Field(default=0)
     completion_tokens: int = Field(default=0)
     total_tokens: int = Field(default=0)
+
+
+class PatientAccount(SQLModel, table=True):
+    """Powiązanie karty pacjenta (należącej do lekarza) z kontem użytkownika o roli pacjenta."""
+
+    __tablename__ = "patient_accounts"
+
+    id: int | None = Field(default=None, primary_key=True)
+    patient_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("patients.id"), unique=True, nullable=False)
+    )
+    user_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    )
+    created_at: datetime = _ts()
+
+
+class Recommendation(SQLModel, table=True):
+    """Zalecenia terapeutyczne widoczne dla pacjenta w jego panelu."""
+
+    __tablename__ = "patient_recommendations"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    )
+    patient_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
+    )
+    title: str = Field(max_length=200)
+    content: str = Field(sa_column=Column(Text, nullable=False))
+    created_at: datetime = _ts(index=True)
+    updated_at: datetime = _ts()
+
+
+class PatientNotification(SQLModel, table=True):
+    __tablename__ = "patient_notifications"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    )
+    patient_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
+    )
+    recipient: str = Field(max_length=254)
+    subject: str = Field(max_length=200)
+    body: str = Field(sa_column=Column(Text, nullable=False))
+    status: str = Field(max_length=20)
+    error: str | None = Field(default=None, max_length=500)
+    created_at: datetime = _ts(index=True)
+
+
+class LlmCall(SQLModel, table=True):
+    """Pełny zapis żądania wysłanego do LLM i otrzymanej odpowiedzi (wgląd dla administratora)."""
+
+    __tablename__ = "llm_calls"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int | None = Field(
+        default=None, sa_column=Column(Integer, ForeignKey("users.id"), index=True, nullable=True)
+    )
+    timestamp: datetime = _ts(index=True)
+    model_name: str = Field(max_length=200)
+    operation: str = Field(max_length=50, index=True)
+    request: list | dict = Field(sa_column=Column(JSON, nullable=False))
+    response: str = Field(default="", sa_column=Column(Text, nullable=False))
+    status: str = Field(default="ok", max_length=20)
+    error: str | None = Field(default=None, max_length=1000)
+    prompt_tokens: int = Field(default=0)
+    completion_tokens: int = Field(default=0)
+    total_tokens: int = Field(default=0)
+    duration_ms: int = Field(default=0)
 
 
 engine = create_async_engine(settings.db_url, pool_pre_ping=True)

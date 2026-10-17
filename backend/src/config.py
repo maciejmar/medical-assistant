@@ -38,6 +38,20 @@ class Settings(BaseSettings):
     rerank_min_score: float = 0.02
     history_window: int = 10
 
+    llm_log_enabled: bool = True
+    llm_log_retention_days: int = 90
+    llm_log_max_chars: int = 100_000
+
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_starttls: bool = True
+    smtp_ssl: bool = False
+    smtp_timeout_seconds: float = 20.0
+    app_public_url: str = "http://localhost:8080"
+
     seed_on_startup: bool = True
     seed_max_attempts: int = 12
 

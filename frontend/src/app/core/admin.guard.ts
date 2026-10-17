@@ -8,5 +8,5 @@ export const adminGuard: CanActivateFn = () => {
   if (!auth.isAuthenticated()) {
     return router.createUrlTree(['/login']);
   }
-  return auth.isAdmin() ? true : router.createUrlTree(['/dashboard']);
+  return auth.isAdmin() ? true : router.createUrlTree([auth.homeRoute()]);
 };

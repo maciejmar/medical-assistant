@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+RoleName = Literal["ROLE_DOCTOR", "ROLE_ADMIN", "ROLE_PATIENT"]
+
 
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -103,7 +105,9 @@ class TranscriptionOut(BaseModel):
 
 class UserPatch(BaseModel):
     is_active: bool | None = None
-    role: Literal["ROLE_DOCTOR", "ROLE_ADMIN"] | None = None
+    role: RoleName | None = None
+    full_name: str | None = Field(default=None, min_length=2, max_length=200)
+    password: str | None = Field(default=None, min_length=8, max_length=72)
 
 
 class UsageBucket(BaseModel):
@@ -144,6 +148,100 @@ class SystemStatsOut(BaseModel):
     users_active: int
     doctors: int
     admins: int
+    patient_accounts: int
     patients_total: int
     conversations_total: int
     knowledge_base_documents: int | None
+
+
+class UserCreateIn(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=200)
+    password: str = Field(min_length=8, max_length=72)
+    role: RoleName = "ROLE_DOCTOR"
+
+
+class LlmCallSummary(BaseModel):
+    id: int
+    timestamp: datetime
+    user_id: int | None
+    user_email: str | None
+    operation: str
+    model_name: str
+    status: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    duration_ms: int
+    preview: str
+
+
+class LlmCallPage(BaseModel):
+    total: int
+    items: list[LlmCallSummary]
+
+
+class LlmCallDetail(LlmCallSummary):
+    request: list | dict
+    response: str
+    error: str | None
+
+
+class PatientAccountIn(BaseModel):
+    email: EmailStr
+    full_name: str | None = Field(default=None, max_length=200)
+    password: str | None = Field(default=None, min_length=8, max_length=72)
+
+
+class PatientAccountOut(BaseModel):
+    user_id: int
+    email: str
+    full_name: str
+    is_active: bool
+
+
+class RecommendationIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=20000)
+    notify: bool = False
+
+
+class RecommendationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    patient_id: int
+    title: str
+    content: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class NotificationIn(BaseModel):
+    subject: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=20000)
+
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    patient_id: int
+    recipient: str
+    subject: str
+    body: str
+    status: str
+    error: str | None
+    created_at: datetime
+
+
+class PatientPortalOut(BaseModel):
+    first_name: str
+    last_name: str
+    birth_date: date | None
+    icd_code: str | None
+    diagnosis: str | None
+    doctor_name: str
+    doctor_email: str
+    recommendations: list[RecommendationOut]
+    notifications: list[NotificationOut]

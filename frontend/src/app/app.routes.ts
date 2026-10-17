@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 import { adminGuard } from './core/admin.guard';
-import { doctorGuard, guestGuard } from './core/doctor.guard';
+import { doctorGuard, guestGuard, patientGuard } from './core/doctor.guard';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
@@ -37,6 +37,20 @@ export const routes: Routes = [
     canActivate: [adminGuard],
     loadComponent: () =>
       import('./features/admin-panel/admin-panel.component').then((m) => m.AdminPanelComponent),
+  },
+  {
+    path: 'admin/llm',
+    canActivate: [adminGuard],
+    loadComponent: () =>
+      import('./features/admin-panel/llm-logs.component').then((m) => m.LlmLogsComponent),
+  },
+  {
+    path: 'patient',
+    canActivate: [patientGuard],
+    loadComponent: () =>
+      import('./features/patient-portal/patient-home.component').then(
+        (m) => m.PatientHomeComponent,
+      ),
   },
   { path: '**', redirectTo: 'dashboard' },
 ];

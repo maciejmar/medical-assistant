@@ -29,6 +29,9 @@ export class AuthService {
   readonly isAuthenticated = computed(() => !!this.tokenSignal() && !!this.userSignal());
   readonly isAdmin = computed(() => this.userSignal()?.role === 'ROLE_ADMIN');
   readonly isDoctor = computed(() => this.userSignal()?.role === 'ROLE_DOCTOR');
+  readonly isPatient = computed(() => this.userSignal()?.role === 'ROLE_PATIENT');
+  /** Dostęp do kart pacjentów i asystenta: użytkownik (logopeda) oraz administrator. */
+  readonly canTreat = computed(() => this.isDoctor() || this.isAdmin());
 
   constructor() {
     this.restoreSession();
@@ -52,7 +55,10 @@ export class AuthService {
   }
 
   homeRoute(): string {
-    return this.isAdmin() ? '/admin' : '/dashboard';
+    if (this.isAdmin()) {
+      return '/admin';
+    }
+    return this.isPatient() ? '/patient' : '/dashboard';
   }
 
   private storeSession(response: TokenResponse): void {

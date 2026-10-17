@@ -1,25 +1,29 @@
 import { DecimalPipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ChartConfiguration, ChartData } from 'chart.js';
 import { BaseChartDirective } from 'ng2-charts';
 import { AdminService } from '../../core/admin.service';
 import { AuthService } from '../../core/auth.service';
-import { SystemStats, UsageReport, User } from '../../shared/models';
+import { ROLE_LABELS, Role, SystemStats, UsageReport, User } from '../../shared/models';
 
 const PALETTE = ['#237d75', '#4f7cff', '#f59e0b', '#e4572e', '#8b5cf6', '#14b8a6', '#64748b'];
 
 @Component({
   selector: 'app-admin-panel',
   standalone: true,
-  imports: [BaseChartDirective, DecimalPipe],
+  imports: [BaseChartDirective, DecimalPipe, ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold">Panel administratora</h1>
-        <p class="text-sm text-slate-500">Zanonimizowane metryki zużycia zasobów. Brak wglądu w dane medyczne.</p>
+        <p class="text-sm text-slate-500">Metryki zużycia zasobów i zarządzanie kontami.</p>
       </div>
       <div class="flex items-center gap-2">
+        <a routerLink="/admin/llm" class="btn-secondary">Log zapytań LLM</a>
         <label class="text-xs font-semibold uppercase text-slate-500" for="range">Zakres</label>
         <select id="range" class="field !w-auto" [value]="days()" (change)="setDays($any($event.target).value)">
           <option value="7">7 dni</option>
@@ -44,7 +48,7 @@ const PALETTE = ['#237d75', '#4f7cff', '#f59e0b', '#e4572e', '#8b5cf6', '#14b8a6
         <p class="text-2xl font-bold">{{ usage()?.totals?.requests ?? 0 | number }}</p>
       </div>
       <div class="card !p-4">
-        <p class="label">Lekarze (aktywni / wszyscy)</p>
+        <p class="label">Konta (aktywne / wszystkie)</p>
         <p class="text-2xl font-bold">{{ stats()?.users_active ?? 0 }} / {{ stats()?.users_total ?? 0 }}</p>
       </div>
       <div class="card !p-4">
@@ -86,7 +90,49 @@ const PALETTE = ['#237d75', '#4f7cff', '#f59e0b', '#e4572e', '#8b5cf6', '#14b8a6
     </div>
 
     <section class="card mt-6">
-      <h2 class="mb-3 font-semibold">Konta użytkowników</h2>
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 class="font-semibold">Konta użytkowników</h2>
+        <button type="button" class="btn-primary" (click)="showCreate.set(!showCreate())">
+          {{ showCreate() ? 'Zamknij' : 'Dodaj użytkownika' }}
+        </button>
+      </div>
+
+      @if (showCreate()) {
+        <form class="mb-4 grid gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-2 lg:grid-cols-5" [formGroup]="createForm" (ngSubmit)="createUser()">
+          <div class="lg:col-span-1">
+            <label class="label" for="new-name">Imię i nazwisko</label>
+            <input id="new-name" class="field" formControlName="full_name" />
+          </div>
+          <div class="lg:col-span-1">
+            <label class="label" for="new-email">E-mail</label>
+            <input id="new-email" class="field" type="email" formControlName="email" />
+          </div>
+          <div class="lg:col-span-1">
+            <label class="label" for="new-password">Hasło (min. 8 znaków)</label>
+            <input id="new-password" class="field" type="password" autocomplete="new-password" formControlName="password" />
+          </div>
+          <div class="lg:col-span-1">
+            <label class="label" for="new-role">Rola</label>
+            <select id="new-role" class="field" formControlName="role">
+              @for (r of roles; track r) {
+                <option [value]="r">{{ roleLabels[r] }}</option>
+              }
+            </select>
+          </div>
+          <div class="flex items-end lg:col-span-1">
+            <button type="submit" class="btn-primary w-full" [disabled]="createForm.invalid || creating()">
+              {{ creating() ? 'Zapisywanie…' : 'Utwórz konto' }}
+            </button>
+          </div>
+          @if (createError()) {
+            <p class="text-sm text-red-600 sm:col-span-2 lg:col-span-5">{{ createError() }}</p>
+          }
+          <p class="text-xs text-slate-500 sm:col-span-2 lg:col-span-5">
+            Konto pacjenta powiąże z kartą pacjenta lekarz prowadzący (karta pacjenta → „Konto pacjenta”).
+          </p>
+        </form>
+      }
+
       <div class="overflow-x-auto">
         <table class="w-full min-w-[36rem] text-sm">
           <thead>
@@ -101,9 +147,15 @@ const PALETTE = ['#237d75', '#4f7cff', '#f59e0b', '#e4572e', '#8b5cf6', '#14b8a6
                 <td class="py-2">{{ u.full_name }}</td>
                 <td class="py-2">{{ u.email }}</td>
                 <td class="py-2">
-                  <span class="badge" [class]="u.role === 'ROLE_ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-brand-50 text-brand-700'">
-                    {{ u.role === 'ROLE_ADMIN' ? 'Admin' : 'Lekarz' }}
-                  </span>
+                  @if (u.id !== auth.user()?.id) {
+                    <select class="field !w-auto !py-1 !text-xs" [value]="u.role" [attr.aria-label]="'Rola ' + u.email" (change)="changeRole(u, $any($event.target))">
+                      @for (r of roles; track r) {
+                        <option [value]="r">{{ roleLabels[r] }}</option>
+                      }
+                    </select>
+                  } @else {
+                    <span class="badge bg-purple-100 text-purple-700">{{ roleLabels[u.role] }}</span>
+                  }
                 </td>
                 <td class="py-2">
                   <span class="badge" [class]="u.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'">
@@ -113,7 +165,7 @@ const PALETTE = ['#237d75', '#4f7cff', '#f59e0b', '#e4572e', '#8b5cf6', '#14b8a6
                 <td class="py-2 text-right">
                   @if (u.id !== auth.user()?.id) {
                     <button type="button" class="btn-secondary !px-2 !py-1 !text-xs" (click)="toggleActive(u)">{{ u.is_active ? 'Zablokuj' : 'Odblokuj' }}</button>
-                    <button type="button" class="btn-secondary ml-1 !px-2 !py-1 !text-xs" (click)="toggleRole(u)">{{ u.role === 'ROLE_ADMIN' ? 'Zmień na lekarza' : 'Nadaj admina' }}</button>
+                    <button type="button" class="btn-secondary ml-1 !px-2 !py-1 !text-xs" (click)="resetPassword(u)">Nowe hasło</button>
                     <button type="button" class="btn-danger ml-1 !px-2 !py-1 !text-xs" (click)="remove(u)">Usuń</button>
                   } @else {
                     <span class="text-xs text-slate-400">to Ty</span>
@@ -136,6 +188,19 @@ export class AdminPanelComponent {
   protected readonly stats = signal<SystemStats | null>(null);
   protected readonly users = signal<User[]>([]);
   protected readonly error = signal<string | null>(null);
+  protected readonly showCreate = signal(false);
+  protected readonly creating = signal(false);
+  protected readonly createError = signal<string | null>(null);
+
+  protected readonly roles: Role[] = ['ROLE_DOCTOR', 'ROLE_PATIENT', 'ROLE_ADMIN'];
+  protected readonly roleLabels = ROLE_LABELS;
+
+  protected readonly createForm = inject(FormBuilder).nonNullable.group({
+    full_name: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(200)]],
+    email: ['', [Validators.required, Validators.email]],
+    password: ['', [Validators.required, Validators.minLength(8), Validators.maxLength(72)]],
+    role: ['ROLE_DOCTOR' as Role, [Validators.required]],
+  });
 
   protected readonly dayChart = computed<ChartData<'bar'>>(() => {
     const rows = this.usage()?.by_day ?? [];
@@ -207,15 +272,61 @@ export class AdminPanelComponent {
     });
   }
 
-  protected toggleRole(user: User): void {
-    const role = user.role === 'ROLE_ADMIN' ? 'ROLE_DOCTOR' : 'ROLE_ADMIN';
-    if (!confirm(`Zmienić rolę użytkownika ${user.email}?`)) {
+  protected changeRole(user: User, select: HTMLSelectElement): void {
+    const role = select.value as Role;
+    if (!confirm(`Zmienić rolę ${user.email} na „${ROLE_LABELS[role]}”?`)) {
+      select.value = user.role;
       return;
     }
     this.api.updateUser(user.id, { role }).subscribe({
       next: (updated) => this.replaceUser(updated),
-      error: () => this.error.set('Nie udało się zmienić roli.'),
+      error: () => {
+        select.value = user.role;
+        this.error.set('Nie udało się zmienić roli.');
+      },
     });
+  }
+
+  protected resetPassword(user: User): void {
+    const password = prompt(`Nowe hasło dla ${user.email} (min. 8 znaków):`);
+    if (password === null) {
+      return;
+    }
+    if (password.length < 8 || password.length > 72) {
+      this.error.set('Hasło musi mieć od 8 do 72 znaków.');
+      return;
+    }
+    this.api.updateUser(user.id, { password }).subscribe({
+      next: () => this.error.set(null),
+      error: () => this.error.set('Nie udało się zmienić hasła.'),
+    });
+  }
+
+  protected createUser(): void {
+    if (this.createForm.invalid || this.creating()) {
+      return;
+    }
+    const v = this.createForm.getRawValue();
+    this.creating.set(true);
+    this.createError.set(null);
+    this.api
+      .createUser({ ...v, email: v.email.trim(), full_name: v.full_name.trim() })
+      .subscribe({
+        next: (user) => {
+          this.users.update((list) => [...list, user]);
+          this.createForm.reset({ full_name: '', email: '', password: '', role: 'ROLE_DOCTOR' });
+          this.creating.set(false);
+          this.showCreate.set(false);
+        },
+        error: (err: unknown) => {
+          this.creating.set(false);
+          this.createError.set(
+            err instanceof HttpErrorResponse && err.status === 409
+              ? 'Konto z tym adresem e-mail już istnieje.'
+              : 'Nie udało się utworzyć konta.',
+          );
+        },
+      });
   }
 
   protected remove(user: User): void {

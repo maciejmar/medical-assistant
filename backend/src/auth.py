@@ -94,6 +94,8 @@ def require_roles(*roles: Role) -> Callable[..., User]:
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
-CurrentDoctor = Annotated[User, Depends(require_roles(Role.DOCTOR))]
+# Administrator jest też logopedą – ma dostęp do własnych pacjentów i asystenta.
+CurrentDoctor = Annotated[User, Depends(require_roles(Role.DOCTOR, Role.ADMIN))]
 CurrentAdmin = Annotated[User, Depends(require_roles(Role.ADMIN))]
+CurrentPatient = Annotated[User, Depends(require_roles(Role.PATIENT))]
 SessionDep = Annotated[AsyncSession, Depends(get_session)]

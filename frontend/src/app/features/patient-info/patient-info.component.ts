@@ -13,11 +13,12 @@ import { AudioRecordingService } from '../../core/audio-recording.service';
 import { PatientsService } from '../../core/patients.service';
 import { NoteSource, Patient, PatientNote } from '../../shared/models';
 import { ageFromBirthDate, emptyToNull, formatDuration } from '../../shared/utils';
+import { PatientCareComponent } from './patient-care.component';
 
 @Component({
   selector: 'app-patient-info',
   standalone: true,
-  imports: [ReactiveFormsModule, FormsModule, RouterLink, DatePipe],
+  imports: [ReactiveFormsModule, FormsModule, RouterLink, DatePipe, PatientCareComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <a routerLink="/dashboard" class="mb-4 inline-block text-sm text-brand-700 hover:underline">← Wróć do pacjentów</a>
@@ -114,6 +115,8 @@ import { ageFromBirthDate, emptyToNull, formatDuration } from '../../shared/util
         </section>
       </div>
 
+      <app-patient-care [patientId]="patientId" />
+
       <section class="card mt-6">
         <h2 class="mb-4 font-semibold">Historia sesji i notatek ({{ notes().length }})</h2>
         @if (notes().length === 0) {
@@ -169,7 +172,7 @@ export class PatientInfoComponent implements OnDestroy {
     description: [''],
   });
 
-  private readonly patientId = Number(this.route.snapshot.paramMap.get('id'));
+  protected readonly patientId = Number(this.route.snapshot.paramMap.get('id'));
 
   constructor() {
     this.api.get(this.patientId).subscribe({

@@ -1,4 +1,10 @@
-export type Role = 'ROLE_DOCTOR' | 'ROLE_ADMIN';
+export type Role = 'ROLE_DOCTOR' | 'ROLE_ADMIN' | 'ROLE_PATIENT';
+
+export const ROLE_LABELS: Record<Role, string> = {
+  ROLE_ADMIN: 'Administrator',
+  ROLE_DOCTOR: 'Użytkownik',
+  ROLE_PATIENT: 'Pacjent',
+};
 
 export interface User {
   id: number;
@@ -109,7 +115,85 @@ export interface SystemStats {
   users_active: number;
   doctors: number;
   admins: number;
+  patient_accounts: number;
   patients_total: number;
   conversations_total: number;
   knowledge_base_documents: number | null;
+}
+
+export interface UserCreateInput {
+  email: string;
+  full_name: string;
+  password: string;
+  role: Role;
+}
+
+export interface LlmCallSummary {
+  id: number;
+  timestamp: string;
+  user_id: number | null;
+  user_email: string | null;
+  operation: string;
+  model_name: string;
+  status: 'ok' | 'error';
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  duration_ms: number;
+  preview: string;
+}
+
+export interface LlmCallPage {
+  total: number;
+  items: LlmCallSummary[];
+}
+
+export interface LlmMessage {
+  role: string;
+  content: string;
+}
+
+export interface LlmCallDetail extends LlmCallSummary {
+  request: LlmMessage[] | { input: string[] };
+  response: string;
+  error: string | null;
+}
+
+export interface PatientAccount {
+  user_id: number;
+  email: string;
+  full_name: string;
+  is_active: boolean;
+}
+
+export interface Recommendation {
+  id: number;
+  patient_id: number;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PatientNotification {
+  id: number;
+  patient_id: number;
+  recipient: string;
+  subject: string;
+  body: string;
+  status: 'sent' | 'failed';
+  error: string | null;
+  created_at: string;
+}
+
+export interface PatientPortal {
+  first_name: string;
+  last_name: string;
+  birth_date: string | null;
+  icd_code: string | null;
+  diagnosis: string | null;
+  doctor_name: string;
+  doctor_email: string;
+  recommendations: Recommendation[];
+  notifications: PatientNotification[];
 }

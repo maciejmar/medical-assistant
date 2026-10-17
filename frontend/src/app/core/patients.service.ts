@@ -1,7 +1,22 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { NoteSource, Patient, PatientInput, PatientNote, RecentNote } from '../shared/models';
+import {
+  NoteSource,
+  Patient,
+  PatientAccount,
+  PatientInput,
+  PatientNote,
+  PatientNotification,
+  RecentNote,
+  Recommendation,
+} from '../shared/models';
+
+export interface RecommendationInput {
+  title: string;
+  content: string;
+  notify: boolean;
+}
 
 @Injectable({ providedIn: 'root' })
 export class PatientsService {
@@ -41,5 +56,54 @@ export class PatientsService {
 
   recentNotes(limit = 8): Observable<RecentNote[]> {
     return this.http.get<RecentNote[]>('/api/patients/notes/recent', { params: { limit } });
+  }
+
+  account(id: number): Observable<PatientAccount | null> {
+    return this.http.get<PatientAccount | null>(`/api/patients/${id}/account`);
+  }
+
+  linkAccount(
+    id: number,
+    input: { email: string; full_name: string | null; password: string | null },
+  ): Observable<PatientAccount> {
+    return this.http.put<PatientAccount>(`/api/patients/${id}/account`, input);
+  }
+
+  unlinkAccount(id: number): Observable<void> {
+    return this.http.delete<void>(`/api/patients/${id}/account`);
+  }
+
+  recommendations(id: number): Observable<Recommendation[]> {
+    return this.http.get<Recommendation[]>(`/api/patients/${id}/recommendations`);
+  }
+
+  addRecommendation(id: number, input: RecommendationInput): Observable<Recommendation> {
+    return this.http.post<Recommendation>(`/api/patients/${id}/recommendations`, input);
+  }
+
+  updateRecommendation(
+    id: number,
+    recommendationId: number,
+    input: RecommendationInput,
+  ): Observable<Recommendation> {
+    return this.http.put<Recommendation>(
+      `/api/patients/${id}/recommendations/${recommendationId}`,
+      input,
+    );
+  }
+
+  removeRecommendation(id: number, recommendationId: number): Observable<void> {
+    return this.http.delete<void>(`/api/patients/${id}/recommendations/${recommendationId}`);
+  }
+
+  notifications(id: number): Observable<PatientNotification[]> {
+    return this.http.get<PatientNotification[]>(`/api/patients/${id}/notifications`);
+  }
+
+  sendNotification(id: number, subject: string, body: string): Observable<PatientNotification> {
+    return this.http.post<PatientNotification>(`/api/patients/${id}/notifications`, {
+      subject,
+      body,
+    });
   }
 }

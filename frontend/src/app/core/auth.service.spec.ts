@@ -49,6 +49,26 @@ describe('AuthService', () => {
     expect(service.isAuthenticated()).toBeFalse();
     expect(localStorage.getItem('logoped.token')).toBeNull();
   });
+
+  it('kieruje pacjenta do jego panelu, a administratora dopuszcza do kart pacjentów', () => {
+    const service = TestBed.inject(AuthService);
+    const http = TestBed.inject(HttpTestingController);
+
+    service.login('p@example.com', 'haslo1234').subscribe();
+    http
+      .expectOne('/api/auth/login')
+      .flush({ ...RESPONSE, user: { ...RESPONSE.user, role: 'ROLE_PATIENT' } });
+    expect(service.isPatient()).toBeTrue();
+    expect(service.canTreat()).toBeFalse();
+    expect(service.homeRoute()).toBe('/patient');
+
+    service.login('a@example.com', 'haslo1234').subscribe();
+    http
+      .expectOne('/api/auth/login')
+      .flush({ ...RESPONSE, user: { ...RESPONSE.user, role: 'ROLE_ADMIN' } });
+    expect(service.canTreat()).toBeTrue();
+    expect(service.homeRoute()).toBe('/admin');
+  });
 });
 
 describe('parseSseFrame', () => {

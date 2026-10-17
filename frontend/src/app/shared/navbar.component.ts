@@ -30,12 +30,16 @@ import { AuthService } from '../core/auth.service';
           [class.hidden]="!open()"
           [class.flex]="open()"
         >
-          @if (auth.isDoctor()) {
+          @if (auth.canTreat()) {
             <a routerLink="/dashboard" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Pacjenci</a>
             <a routerLink="/chat" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Asystent</a>
           }
           @if (auth.isAdmin()) {
-            <a routerLink="/admin" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Panel administratora</a>
+            <a routerLink="/admin" routerLinkActive="bg-brand-50 text-brand-700" [routerLinkActiveOptions]="{ exact: true }" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Panel administratora</a>
+            <a routerLink="/admin/llm" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Log LLM</a>
+          }
+          @if (auth.isPatient()) {
+            <a routerLink="/patient" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Mój panel</a>
           }
           <span class="px-3 py-1 text-xs text-slate-500 sm:ml-2">{{ auth.user()?.full_name }}</span>
           <button type="button" class="btn-secondary" (click)="auth.logout()">Wyloguj</button>

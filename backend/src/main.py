@@ -10,7 +10,7 @@ from .api.router import api_router
 from .auth import hash_password
 from .config import settings
 from .database import Role, User, init_db, session_factory
-from .llm import drain_background_tasks
+from .llm import drain_background_tasks, purge_old_llm_calls
 from .seed import seed_with_retries
 from .vector_store import reranker, vector_store
 
@@ -23,6 +23,11 @@ async def ensure_admin() -> None:
     async with session_factory() as session:
         existing = (await session.exec(select(User).where(User.email == email))).first()
         if existing:
+            if existing.role != Role.ADMIN.value:
+                existing.role = Role.ADMIN.value
+                session.add(existing)
+                await session.commit()
+                logger.info("Nadano rolę administratora istniejącemu kontu %s", email)
             return
         session.add(
             User(
@@ -40,6 +45,7 @@ async def ensure_admin() -> None:
 async def lifespan(_: FastAPI):
     await init_db()
     await ensure_admin()
+    await purge_old_llm_calls()
     background: list[asyncio.Task] = [asyncio.create_task(reranker.warmup())]
     if settings.seed_on_startup:
         background.append(asyncio.create_task(seed_with_retries()))

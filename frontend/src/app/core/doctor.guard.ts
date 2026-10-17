@@ -8,7 +8,16 @@ export const doctorGuard: CanActivateFn = () => {
   if (!auth.isAuthenticated()) {
     return router.createUrlTree(['/login']);
   }
-  return auth.isDoctor() ? true : router.createUrlTree(['/admin']);
+  return auth.canTreat() ? true : router.createUrlTree([auth.homeRoute()]);
+};
+
+export const patientGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  if (!auth.isAuthenticated()) {
+    return router.createUrlTree(['/login']);
+  }
+  return auth.isPatient() ? true : router.createUrlTree([auth.homeRoute()]);
 };
 
 export const guestGuard: CanActivateFn = () => {
