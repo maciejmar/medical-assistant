@@ -148,9 +148,11 @@ const PALETTE = ['#237d75', '#4f7cff', '#f59e0b', '#e4572e', '#8b5cf6', '#14b8a6
                 <td class="py-2">{{ u.email }}</td>
                 <td class="py-2">
                   @if (u.id !== auth.user()?.id) {
-                    <select class="field !w-auto !py-1 !text-xs" [value]="u.role" [attr.aria-label]="'Rola ' + u.email" (change)="changeRole(u, $any($event.target))">
+                    <!-- [selected] na opcjach, nie [value] na select: opcje z @for powstają po
+                         ustawieniu wartości selecta i przeglądarka pokazywałaby zawsze pierwszą -->
+                    <select class="field !w-auto !py-1 !text-xs" [attr.aria-label]="'Rola ' + u.email" (change)="changeRole(u, $any($event.target))">
                       @for (r of roles; track r) {
-                        <option [value]="r">{{ roleLabels[r] }}</option>
+                        <option [value]="r" [selected]="r === u.role">{{ roleLabels[r] }}</option>
                       }
                     </select>
                   } @else {
