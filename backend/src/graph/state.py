@@ -18,7 +18,6 @@ class ChatState(TypedDict, total=False):
     patient_context: str | None
 
     rewritten_query: str
-    needs_retrieval: bool
     filters: dict[str, str]
 
     candidates: list[dict[str, Any]]

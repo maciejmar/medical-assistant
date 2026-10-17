@@ -128,6 +128,9 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
                             @if (s.icd10) { · ICD-10 {{ s.icd10 }} }
                             @if (s.icd11) { · ICD-11 {{ s.icd11 }} }
                             · trafność {{ s.score }}
+                            @if (s.low_relevance) {
+                              <span class="badge ml-1 bg-amber-100 text-amber-700">luźno związane z pytaniem</span>
+                            }
                           </p>
                           <p class="mt-0.5">{{ s.snippet }}…</p>
                         </li>

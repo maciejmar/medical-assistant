@@ -1,6 +1,6 @@
 from src.api import audio as audio_module
-from src.graph.edges import build_graph, route_after_rerank, route_after_rewrite
-from src.graph.nodes import build_answer_messages, parse_rewrite_output
+from src.graph.edges import build_graph, route_after_rerank
+from src.graph.nodes import build_answer_messages, parse_rewrite_output, with_clinical_terms
 from src.graph.state import merge_usage
 from src.seed import document_id, embedding_text
 from src.seed_data import DOCUMENTS
@@ -9,19 +9,18 @@ from src.vector_store import build_filter, sparse_vector
 
 def test_parse_rewrite_output_valid_and_sanitised():
     raw = (
-        'Oto wynik: {"query": "terapia rotacyzmu u dzieci F80.0", "needs_retrieval": true, '
+        'Oto wynik: {"query": "terapia rotacyzmu u dzieci F80.0", '
         '"filters": {"category": "technique", "audience": "hacker"}}'
     )
     parsed = parse_rewrite_output(raw, "jak leczyć r?")
     assert parsed["query"] == "terapia rotacyzmu u dzieci F80.0"
     assert parsed["filters"] == {"category": "technique"}
-    assert parsed["needs_retrieval"] is True
 
 
 def test_parse_rewrite_output_falls_back_on_garbage():
     for raw in ("", "nie json", "{zły json}", "[1, 2]"):
         parsed = parse_rewrite_output(raw, "pytanie")
-        assert parsed == {"query": "pytanie", "needs_retrieval": True, "filters": {}}
+        assert parsed == {"query": "pytanie", "filters": {}}
 
 
 def test_sparse_vector_is_deterministic_and_stemmed():
@@ -41,8 +40,6 @@ def test_build_filter_only_accepts_known_values():
 
 
 def test_routing_and_usage_reducer():
-    assert route_after_rewrite({"needs_retrieval": False}) == "generate_without_context"
-    assert route_after_rewrite({"needs_retrieval": True}) == "retrieve"
     assert route_after_rerank({"documents": []}) == "generate_without_context"
     assert route_after_rerank({"documents": [{"title": "t"}]}) == "generate"
     merged = merge_usage(
@@ -59,7 +56,6 @@ def test_answer_messages_contain_sources_and_no_patient_name():
         "history": [{"role": "user", "content": "wcześniej"}],
         "documents": [{"title": "Rotacyzm", "text": "Opis", "icd10": "F80.0", "icd11": "6A01.0"}],
         "patient_context": "Wiek: 6 lat",
-        "needs_retrieval": True,
     }
     messages = build_answer_messages(state, grounded=True)
     assert messages[0]["role"] == "system" and messages[-1]["role"] == "user"
@@ -117,3 +113,31 @@ async def test_transcribe_endpoint(client, make_headers, monkeypatch):
         "/api/audio/transcribe", files={"audio": ("a.wav", b"abc", "audio/wav")}
     )
     assert anonymous.status_code == 401
+
+
+def test_clinical_terms_are_added_to_query():
+    context = "Wiek: 6 lat\nKod ICD: F80.0\nRozpoznanie: Rotacyzm\nOpis: ćwiczy w domu"
+    assert with_clinical_terms("jakie ćwiczenia zalecić", context) == (
+        "jakie ćwiczenia zalecić F80.0 Rotacyzm"
+    )
+    assert with_clinical_terms("terapia F80.0 Rotacyzm", context) == "terapia F80.0 Rotacyzm"
+    assert with_clinical_terms("pytanie", None) == "pytanie"
+
+
+def test_low_relevance_documents_are_kept_and_flagged():
+    from src.vector_store import select_relevant
+
+    scored = [
+        {"title": t, "text": t, "score": s} for t, s in (("a", 0.01), ("b", 0.005), ("c", 0.001))
+    ]
+    fallback = select_relevant(scored, top_n=4)
+    assert [d["title"] for d in fallback] == ["a", "b"]
+    assert all(d["low_relevance"] for d in fallback)
+
+    relevant = select_relevant([{"title": "x", "score": 0.9}, *scored], top_n=4)
+    assert [d["title"] for d in relevant] == ["x"]
+    assert "low_relevance" not in relevant[0]
+
+    state = {"question": "q", "documents": fallback}
+    messages = build_answer_messages(state, grounded=True)
+    assert "luźno związane" in messages[0]["content"]

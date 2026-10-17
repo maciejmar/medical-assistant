@@ -64,6 +64,8 @@ export interface ChatSource {
   icd11: string;
   snippet: string;
   score: number;
+  /** Fragment poniżej progu trafności – pokazany, bo żaden lepszy nie został znaleziony. */
+  low_relevance?: boolean;
 }
 
 export interface TokenCounter {

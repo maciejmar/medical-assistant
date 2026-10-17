@@ -121,6 +121,15 @@ class VectorStore:
         await self.client.close()
 
 
+def select_relevant(scored: list[dict[str, Any]], top_n: int) -> list[dict[str, Any]]:
+    """Fragmenty powyżej progu trafności; gdy żaden go nie przekracza – najlepsze z nich
+    z flagą low_relevance, żeby odpowiedź zawsze miała źródła (oznaczone jako luźno związane)."""
+    relevant = [d for d in scored[:top_n] if d["score"] >= settings.rerank_min_score]
+    if relevant:
+        return relevant
+    return [{**d, "low_relevance": True} for d in scored[: settings.rerank_fallback_n]]
+
+
 class Reranker:
     """Lokalny Cross-Encoder (sentence-transformers) odfiltrowujący szum przed generacją."""
 
@@ -167,7 +176,7 @@ class Reranker:
             score = 1.0 / (1.0 + math.exp(-float(raw)))
             scored.append({**doc, "score": score})
         scored.sort(key=lambda d: d["score"], reverse=True)
-        return [d for d in scored[:top_n] if d["score"] >= settings.rerank_min_score]
+        return select_relevant(scored, top_n)
 
 
 vector_store = VectorStore()

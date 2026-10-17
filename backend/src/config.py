@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     retrieval_top_k: int = 12
     rerank_top_n: int = 4
     rerank_min_score: float = 0.02
+    rerank_fallback_n: int = 2
     history_window: int = 10
 
     llm_log_enabled: bool = True

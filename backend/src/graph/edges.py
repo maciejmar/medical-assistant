@@ -6,10 +6,6 @@ from . import nodes
 from .state import ChatState
 
 
-def route_after_rewrite(state: ChatState) -> Literal["retrieve", "generate_without_context"]:
-    return "retrieve" if state.get("needs_retrieval", True) else "generate_without_context"
-
-
 def route_after_rerank(state: ChatState) -> Literal["generate", "generate_without_context"]:
     return "generate" if state.get("documents") else "generate_without_context"
 
@@ -24,11 +20,8 @@ def build_graph():
     graph.add_node("report_usage", nodes.report_usage)
 
     graph.add_edge(START, "rewrite_query")
-    graph.add_conditional_edges(
-        "rewrite_query",
-        route_after_rewrite,
-        {"retrieve": "retrieve", "generate_without_context": "generate_without_context"},
-    )
+    # Baza wiedzy jest przeszukiwana zawsze – każda odpowiedź ma mieć źródła.
+    graph.add_edge("rewrite_query", "retrieve")
     graph.add_edge("retrieve", "rerank")
     graph.add_conditional_edges(
         "rerank",
