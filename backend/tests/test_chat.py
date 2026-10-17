@@ -99,3 +99,33 @@ async def test_chat_rejects_foreign_patient(client, make_headers, monkeypatch):
         "/api/chat", json={"message": "Pytanie", "patient_id": pid}, headers=headers_y
     )
     assert response.status_code == 404
+
+
+async def test_patient_chat_history(client, make_headers, monkeypatch):
+    monkeypatch.setattr(chat_module, "rag_graph", FakeGraph())
+    headers_x = await make_headers("x@example.com")
+    headers_y = await make_headers("y@example.com")
+    pid = (
+        await client.post(
+            "/api/patients", json={"first_name": "A", "last_name": "B"}, headers=headers_x
+        )
+    ).json()["id"]
+    await client.post(
+        "/api/chat", json={"message": "O pacjencie", "patient_id": pid}, headers=headers_x
+    )
+    await client.post("/api/chat", json={"message": "Ogólne pytanie"}, headers=headers_x)
+
+    history = await client.get(f"/api/patients/{pid}/chat-history", headers=headers_x)
+    assert history.status_code == 200
+    messages = history.json()
+    assert [m["role"] for m in messages] == ["user", "assistant"]
+    assert messages[0]["content"] == "O pacjencie"
+    assert messages[1]["content"] == "Odpowiedź [1]"
+    assert messages[0]["conversation_id"] == messages[1]["conversation_id"]
+
+    foreign = await client.get(f"/api/patients/{pid}/chat-history", headers=headers_y)
+    assert foreign.status_code == 404
+
+    assert (await client.delete(f"/api/patients/{pid}", headers=headers_x)).status_code == 204
+    listing = (await client.get("/api/chat/conversations", headers=headers_x)).json()
+    assert len(listing) == 2

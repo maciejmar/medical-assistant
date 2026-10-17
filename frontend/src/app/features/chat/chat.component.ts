@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { ChatService } from '../../core/chat.service';
 import { PatientsService } from '../../core/patients.service';
 import {
@@ -197,6 +198,16 @@ export class ChatComponent implements OnDestroy {
   constructor() {
     this.loadConversations();
     this.patientsApi.list().subscribe({ next: (list) => this.patients.set(list) });
+    // Wejście z historii pacjenta: /chat?conversation=<id>&patient=<id>
+    const params = inject(ActivatedRoute).snapshot.queryParamMap;
+    const patient = Number(params.get('patient'));
+    if (Number.isInteger(patient) && patient > 0) {
+      this.patientId.set(patient);
+    }
+    const conversation = params.get('conversation');
+    if (conversation) {
+      this.open({ conversation_id: conversation });
+    }
     effect(() => {
       this.messages();
       queueMicrotask(() => {
@@ -232,7 +243,7 @@ export class ChatComponent implements OnDestroy {
     this.sessionUsage.set({ ...EMPTY_USAGE });
   }
 
-  protected open(conversation: ConversationSummary): void {
+  protected open(conversation: Pick<ConversationSummary, 'conversation_id'>): void {
     this.stop();
     this.chatApi.conversation(conversation.conversation_id).subscribe({
       next: (stored) => {

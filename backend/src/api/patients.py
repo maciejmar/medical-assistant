@@ -1,10 +1,12 @@
 """CRUD pacjentów. Każde zapytanie SQL jest filtrowane po user_id zalogowanego lekarza."""
 
 from fastapi import APIRouter, HTTPException, Response, status
+from sqlalchemy import update
 from sqlmodel import col, delete, select
 
 from ..auth import CurrentDoctor, SessionDep
 from ..database import (
+    ChatMessage,
     Patient,
     PatientAccount,
     PatientNote,
@@ -12,7 +14,14 @@ from ..database import (
     Recommendation,
     utcnow,
 )
-from .schemas import NoteIn, NoteOut, PatientIn, PatientOut, RecentNoteOut
+from .schemas import (
+    NoteIn,
+    NoteOut,
+    PatientChatMessageOut,
+    PatientIn,
+    PatientOut,
+    RecentNoteOut,
+)
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -34,6 +43,11 @@ async def purge_patients(session: SessionDep, patient_ids: list[int]) -> None:
         return
     for model in (PatientNote, Recommendation, PatientNotification, PatientAccount):
         await session.exec(delete(model).where(col(model.patient_id).in_(patient_ids)))
+    await session.exec(
+        update(ChatMessage)
+        .where(col(ChatMessage.patient_id).in_(patient_ids))
+        .values(patient_id=None)
+    )
     await session.exec(delete(Patient).where(col(Patient.id).in_(patient_ids)))
 
 
@@ -106,6 +120,22 @@ async def delete_patient(patient_id: int, session: SessionDep, doctor: CurrentDo
     await purge_patients(session, [patient.id])  # type: ignore[list-item]
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{patient_id}/chat-history", response_model=list[PatientChatMessageOut])
+async def chat_history(
+    patient_id: int, session: SessionDep, doctor: CurrentDoctor, limit: int = 500
+) -> list[ChatMessage]:
+    """Pytania do asystenta (i odpowiedzi) zadane z wybranym kontekstem tego pacjenta."""
+    patient = await get_owned_patient(session, patient_id, doctor)
+    limit = max(1, min(limit, 1000))
+    result = await session.exec(
+        select(ChatMessage)
+        .where(ChatMessage.patient_id == patient.id, ChatMessage.user_id == doctor.id)
+        .order_by(col(ChatMessage.created_at).desc(), col(ChatMessage.id).desc())
+        .limit(limit)
+    )
+    return list(reversed(result.all()))
 
 
 @router.get("/{patient_id}/notes", response_model=list[NoteOut])

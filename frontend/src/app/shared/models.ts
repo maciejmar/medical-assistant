@@ -90,6 +90,10 @@ export interface StoredChatMessage {
   created_at: string;
 }
 
+export interface PatientChatMessage extends StoredChatMessage {
+  conversation_id: string;
+}
+
 export interface ConversationSummary {
   conversation_id: string;
   title: string;

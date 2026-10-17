@@ -92,6 +92,10 @@ class ChatMessageOut(BaseModel):
     created_at: datetime
 
 
+class PatientChatMessageOut(ChatMessageOut):
+    conversation_id: str
+
+
 class ConversationOut(BaseModel):
     conversation_id: str
     title: str

@@ -11,7 +11,40 @@ import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angu
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AudioRecordingService } from '../../core/audio-recording.service';
 import { PatientsService } from '../../core/patients.service';
-import { NoteSource, Patient, PatientNote } from '../../shared/models';
+import { NoteSource, Patient, PatientChatMessage, PatientNote } from '../../shared/models';
+
+interface PromptExchange {
+  id: number;
+  conversation_id: string;
+  created_at: string;
+  question: string;
+  answer: string | null;
+}
+
+/** Łączy pytanie lekarza z następującą po nim odpowiedzią asystenta; najnowsze na górze. */
+export function toExchanges(messages: PatientChatMessage[]): PromptExchange[] {
+  const exchanges: PromptExchange[] = [];
+  const lastByConversation = new Map<string, PromptExchange>();
+  for (const m of messages) {
+    if (m.role === 'user') {
+      const exchange: PromptExchange = {
+        id: m.id,
+        conversation_id: m.conversation_id,
+        created_at: m.created_at,
+        question: m.content,
+        answer: null,
+      };
+      exchanges.push(exchange);
+      lastByConversation.set(m.conversation_id, exchange);
+    } else {
+      const exchange = lastByConversation.get(m.conversation_id);
+      if (exchange && exchange.answer === null) {
+        exchange.answer = m.content;
+      }
+    }
+  }
+  return exchanges.reverse();
+}
 import { ageFromBirthDate, emptyToNull, formatDuration } from '../../shared/utils';
 import { PatientCareComponent } from './patient-care.component';
 
@@ -118,7 +151,42 @@ import { PatientCareComponent } from './patient-care.component';
       <app-patient-care [patientId]="patientId" />
 
       <section class="card mt-6">
-        <h2 class="mb-4 font-semibold">Historia sesji i notatek ({{ notes().length }})</h2>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 class="font-semibold">Historia pacjenta</h2>
+          <div class="flex gap-1 rounded-lg bg-slate-100 p-1 text-sm" role="tablist">
+            <button type="button" role="tab" class="rounded-md px-3 py-1" [attr.aria-selected]="historyTab() === 'notes'" [class.bg-white]="historyTab() === 'notes'" [class.font-semibold]="historyTab() === 'notes'" (click)="historyTab.set('notes')">
+              Sesje i notatki ({{ notes().length }})
+            </button>
+            <button type="button" role="tab" class="rounded-md px-3 py-1" [attr.aria-selected]="historyTab() === 'prompts'" [class.bg-white]="historyTab() === 'prompts'" [class.font-semibold]="historyTab() === 'prompts'" (click)="historyTab.set('prompts')">
+              Pytania do asystenta ({{ exchanges().length }})
+            </button>
+          </div>
+        </div>
+
+        @if (historyTab() === 'prompts') {
+          @if (exchanges().length === 0) {
+            <p class="text-sm text-slate-500">Brak pytań do asystenta z wybranym tym pacjentem.</p>
+          }
+          <ul class="space-y-3">
+            @for (e of exchanges(); track e.id) {
+              <li class="rounded-lg border border-slate-200 p-3">
+                <div class="mb-1 flex items-center justify-between gap-2 text-xs text-slate-500">
+                  <span>{{ e.created_at | date: 'dd.MM.yyyy HH:mm' }}</span>
+                  <a class="text-brand-700 hover:underline" [routerLink]="['/chat']" [queryParams]="{ conversation: e.conversation_id, patient: patientId }">Otwórz rozmowę</a>
+                </div>
+                <p class="whitespace-pre-wrap text-sm font-medium">{{ e.question }}</p>
+                @if (e.answer) {
+                  <details class="mt-2">
+                    <summary class="cursor-pointer text-xs text-slate-500">Odpowiedź asystenta</summary>
+                    <p class="mt-1 whitespace-pre-wrap rounded-lg bg-slate-50 p-2 text-sm">{{ e.answer }}</p>
+                  </details>
+                } @else {
+                  <p class="mt-1 text-xs text-slate-400">Brak zapisanej odpowiedzi.</p>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
         @if (notes().length === 0) {
           <p class="text-sm text-slate-500">Brak notatek.</p>
         }
@@ -136,6 +204,7 @@ import { PatientCareComponent } from './patient-care.component';
             </li>
           }
         </ul>
+        }
       </section>
     } @else if (loadError()) {
       <div class="card text-sm text-red-700">{{ loadError() }}</div>
@@ -153,6 +222,9 @@ export class PatientInfoComponent implements OnDestroy {
 
   protected readonly patient = signal<Patient | null>(null);
   protected readonly notes = signal<PatientNote[]>([]);
+  protected readonly historyTab = signal<'notes' | 'prompts'>('notes');
+  private readonly chatMessages = signal<PatientChatMessage[]>([]);
+  protected readonly exchanges = computed(() => toExchanges(this.chatMessages()));
   protected readonly loadError = signal<string | null>(null);
   protected readonly saving = signal(false);
   protected readonly saveMessage = signal<string | null>(null);
@@ -190,6 +262,9 @@ export class PatientInfoComponent implements OnDestroy {
       error: () => this.loadError.set('Nie znaleziono pacjenta lub brak dostępu.'),
     });
     this.api.notes(this.patientId).subscribe({ next: (notes) => this.notes.set(notes) });
+    this.api
+      .chatHistory(this.patientId)
+      .subscribe({ next: (messages) => this.chatMessages.set(messages) });
   }
 
   ngOnDestroy(): void {

@@ -5,6 +5,7 @@ import {
   NoteSource,
   Patient,
   PatientAccount,
+  PatientChatMessage,
   PatientInput,
   PatientNote,
   PatientNotification,
@@ -56,6 +57,10 @@ export class PatientsService {
 
   recentNotes(limit = 8): Observable<RecentNote[]> {
     return this.http.get<RecentNote[]>('/api/patients/notes/recent', { params: { limit } });
+  }
+
+  chatHistory(id: number): Observable<PatientChatMessage[]> {
+    return this.http.get<PatientChatMessage[]>(`/api/patients/${id}/chat-history`);
   }
 
   account(id: number): Observable<PatientAccount | null> {
