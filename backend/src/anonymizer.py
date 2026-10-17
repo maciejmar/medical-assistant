@@ -1,13 +1,17 @@
 """Anonimizacja tekstu przed wysłaniem do zewnętrznego LLM.
 
-Usuwane są:
-- imiona i nazwiska pacjentów zalogowanego lekarza (z kart pacjentów), także w odmianie
-  (Kowalski → Kowalskiego, Anna → Annie),
-- identyfikatory rozpoznawane wzorcem: e-mail, PESEL, numer konta, telefon, numer dowodu,
-  kod pocztowy, adres (ul./al./os./pl.), pełne daty.
+Zakres jest celowo wąski – usuwane są WYŁĄCZNIE dane wskazujące wprost na osobę:
+- imię i nazwisko pacjentów zalogowanego lekarza (z kart pacjentów), także w odmianie
+  (Kowalski → Kowalskiego, Anna → Annie); imię zastępuje znacznik z płcią
+  ([IMIĘ PACJENTA] / [IMIĘ PACJENTKI]), żeby model zachował rodzaj gramatyczny,
+- PESEL,
+- numer telefonu,
+- adres (ul./al./os./pl. z numerem) i kod pocztowy.
 
+Wszystko inne – wiek, płeć, rozpoznanie, ICD, cechy szczególne, daty, liczby – trafia do modelu
+bez zmian, żeby nie osłabiać jakości odpowiedzi.
 Ograniczenie: imiona osób spoza kart pacjentów (np. rodziców) wpisane wolnym tekstem nie są
-wykrywane – wymagałoby to modelu NER. Kody ICD (np. F80.0) i wiek pozostają bez zmian.
+wykrywane – wymagałoby to modelu NER.
 """
 
 import re
@@ -18,30 +22,30 @@ from sqlmodel import col, select
 
 from .database import Patient, session_factory
 
-FIRST_NAME = "[IMIĘ]"
+FIRST_NAME_MALE = "[IMIĘ PACJENTA]"
+FIRST_NAME_FEMALE = "[IMIĘ PACJENTKI]"
 LAST_NAME = "[NAZWISKO]"
 
-# Kolejność ma znaczenie: dłuższe ciągi cyfr przed krótszymi (PESEL przed telefonem).
-_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = tuple(
-    (re.compile(pattern), label)
-    for pattern, label in (
-        (r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", "[EMAIL]"),
-        (r"\b(?:PL)?\d{2}(?:[ ]?\d{4}){6}\b", "[NR KONTA]"),
-        (r"\b\d{11}\b", "[PESEL]"),
-        (r"(?<![\w.])(?:\+48[ -]?)?\d{3}[ -]?\d{3}[ -]?\d{3}\b", "[TELEFON]"),
-        (r"\b[A-Z]{3}[ ]?\d{6}\b", "[NR DOKUMENTU]"),
-        (r"\b\d{1,2}[./-]\d{1,2}[./-](?:19|20)\d{2}\b", "[DATA]"),
-        (r"\b(?:19|20)\d{2}-\d{2}-\d{2}\b", "[DATA]"),
-        (r"\b\d{2}-\d{3}\b", "[KOD POCZTOWY]"),
-        # Prefiks bez względu na wielkość liter, nazwa ulicy: do 3 słów z wielkiej litery + numer.
-        (
+# Polskie imiona męskie zakończone na -a (reszta imion na -a to imiona żeńskie).
+_MALE_NAMES_ENDING_A = {"kuba", "barnaba", "bonawentura", "kosma", "jarema", "boryna"}
+
+_IDENTIFIERS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # PESEL przed telefonem (11 cyfr zawiera w sobie 9).
+    (re.compile(r"\b\d{11}\b"), "[PESEL]"),
+    (re.compile(r"(?<![\w.])(?:\+48[ -]?)?\d{3}[ -]?\d{3}[ -]?\d{3}\b"), "[TELEFON]"),
+    # Prefiks bez względu na wielkość liter, nazwa ulicy: do 3 słów z wielkiej litery + numer.
+    (
+        re.compile(
             r"\b(?i:ul\.|ulica|ulicy|al\.|aleja|alei|os\.|osiedle|osiedlu|pl\.|plac|placu)\s+"
             r"[A-ZĄĆĘŁŃÓŚŹŻ0-9][\w.-]*(?:\s+[A-ZĄĆĘŁŃÓŚŹŻ][\w.-]*){0,2}"
-            r"(?:\s+\d+[a-zA-Z]?(?:\s*/\s*\d+[a-zA-Z]?)?)?",
-            "[ADRES]",
+            r"(?:\s+\d+[a-zA-Z]?(?:\s*/\s*\d+[a-zA-Z]?)?)?"
         ),
-    )
+        "[ADRES]",
+    ),
+    (re.compile(r"\b\d{2}-\d{3}\b"), "[ADRES]"),  # kod pocztowy
 )
+
+_MARKER = re.compile(r"\[(?:IMIĘ|NAZWISKO|PESEL|TELEFON|ADRES)[^\]]*\]")
 
 # Końcówki fleksyjne polskich imion i nazwisk (Kowalskiego, Nowakowi, Annie, Janem…).
 # Także formy żeńskie od nazwisk (Nowakowa, Nowakowej, Nowakówna).
@@ -73,16 +77,23 @@ def _name_pattern(names: Iterable[str]) -> re.Pattern[str] | None:
     return re.compile(rf"\b(?:{alternatives})(?:{_ENDINGS})?\b", re.IGNORECASE)
 
 
+def is_female_name(first_name: str) -> bool:
+    name = first_name.strip().split()[0].lower() if first_name.strip() else ""
+    return name.endswith("a") and name not in _MALE_NAMES_ENDING_A
+
+
 @dataclass(frozen=True)
 class Anonymizer:
-    first_names: re.Pattern[str] | None = None
+    female_first_names: re.Pattern[str] | None = None
+    male_first_names: re.Pattern[str] | None = None
     last_names: re.Pattern[str] | None = None
 
     @classmethod
     def for_names(cls, people: Iterable[tuple[str, str]]) -> "Anonymizer":
         people = list(people)
         return cls(
-            first_names=_name_pattern(first for first, _ in people),
+            female_first_names=_name_pattern(f for f, _ in people if is_female_name(f)),
+            male_first_names=_name_pattern(f for f, _ in people if not is_female_name(f)),
             last_names=_name_pattern(last for _, last in people),
         )
 
@@ -92,14 +103,20 @@ class Anonymizer:
         # Nazwiska przed imionami: „Jan Janowski” – rdzeń imienia nie zje początku nazwiska.
         if self.last_names is not None:
             text = self.last_names.sub(LAST_NAME, text)
-        if self.first_names is not None:
-            text = self.first_names.sub(FIRST_NAME, text)
-        for pattern, label in _PATTERNS:
+        if self.female_first_names is not None:
+            text = self.female_first_names.sub(FIRST_NAME_FEMALE, text)
+        if self.male_first_names is not None:
+            text = self.male_first_names.sub(FIRST_NAME_MALE, text)
+        for pattern, label in _IDENTIFIERS:
             text = pattern.sub(label, text)
         return text
 
     def messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         return [{**m, "content": self(str(m.get("content", "")))} for m in messages]
+
+    def for_search(self, text: str) -> str:
+        """Wersja do embeddingu/wyszukiwania: znaczniki usunięte, żeby nie zaszumiały zapytania."""
+        return " ".join(_MARKER.sub(" ", self(text)).split())
 
 
 PATTERNS_ONLY = Anonymizer()

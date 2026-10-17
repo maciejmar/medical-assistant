@@ -282,7 +282,7 @@ async def embed(
     started = time.monotonic()
     if user_id is not None:  # treści systemowe (seeding bazy wiedzy) nie zawierają danych osób
         anonymize = await anonymizer_for(user_id)
-        texts = [anonymize(t) for t in texts]
+        texts = [anonymize.for_search(t) for t in texts]
     request = {"input": [_clip(t) for t in texts]}
     try:
         response = await client.embeddings.create(model=settings.vllm_embedding_model, input=texts)

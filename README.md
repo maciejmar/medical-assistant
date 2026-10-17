@@ -53,8 +53,11 @@ docker compose up --build
 - Do zewnętrznego LLM trafia kontekst pacjenta bez imienia i nazwiska (wiek, kod ICD, rozpoznanie, opis).
 - Każdy tekst wysyłany do LLM (pytanie, historia rozmowy, kontekst pacjenta, zapytanie do embeddingu) przechodzi
   przez `backend/src/anonymizer.py`: imiona i nazwiska pacjentów lekarza (z odmianą) zastępowane są przez
-  `[IMIĘ]`/`[NAZWISKO]`, a PESEL, telefon, e-mail, adres, kod pocztowy, numer dowodu, numer konta i pełne daty –
-  odpowiednimi znacznikami. Log LLM w panelu administratora zawiera już wersję zanonimizowaną.
+  `[IMIĘ PACJENTA]`/`[IMIĘ PACJENTKI]` i `[NAZWISKO]`, a PESEL, telefon i adres (z kodem pocztowym) – znacznikami.
+  Nic poza tym nie jest usuwane: wiek (u dzieci z miesiącami), płeć, ICD, rozpoznanie, pełny opis z cechami
+  szczególnymi, daty i liczby trafiają do modelu bez zmian. Model jest poinstruowany, jak traktować znaczniki,
+  a do wyszukiwania w bazie wiedzy trafia tekst bez znaczników. Log LLM w panelu administratora zawiera już
+  wersję zanonimizowaną.
 - Ograniczenie: imiona osób spoza kart pacjentów (np. rodziców) wpisane wolnym tekstem nie są wykrywane.
 - Nagrania do dyktowania notatek trafiają do zewnętrznego API Whisper w oryginale (głosu nie da się
   zanonimizować) – do pełnej ochrony danych Whisper powinien działać na własnej infrastrukturze.

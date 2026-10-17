@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlmodel import col, delete, select
 
+from ..anonymizer import is_female_name
 from ..auth import CurrentDoctor, SessionDep
 from ..config import settings
 from ..database import ChatMessage, Patient, User, session_factory
@@ -26,20 +27,34 @@ def sse(event: str, payload: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+def format_age(birth_date: date, today: date) -> str:
+    """Wiek w latach; u dzieci także miesiące (normy rozwoju mowy w zapisie lata;mies.)."""
+    months = (today.year - birth_date.year) * 12 + today.month - birth_date.month
+    months -= today.day < birth_date.day
+    years, rest = divmod(max(months, 0), 12)
+    if years >= 18:
+        return f"{years} lat"
+    return f"{years} lat {rest} mies. ({years};{rest})"
+
+
 def describe_patient(patient: Patient) -> str:
-    """Kontekst przekazywany do zewnętrznego LLM – bez imienia i nazwiska pacjenta."""
+    """Pełny kontekst kliniczny dla LLM – bez imienia i nazwiska pacjenta.
+
+    Opis przekazywany jest w całości; ewentualne dane identyfikujące wpisane w nim przez lekarza
+    (PESEL, telefon, adres, imiona i nazwiska pacjentów) usuwa anonimizator w src.llm.
+    """
     lines = []
     if patient.birth_date:
-        today = date.today()
-        age = today.year - patient.birth_date.year
-        age -= (today.month, today.day) < (patient.birth_date.month, patient.birth_date.day)
-        lines.append(f"Wiek: {age} lat")
+        lines.append(f"Wiek: {format_age(patient.birth_date, date.today())}")
+    if patient.first_name:
+        sex = "żeńska" if is_female_name(patient.first_name) else "męska"
+        lines.append(f"Płeć: {sex}")
     if patient.icd_code:
         lines.append(f"Kod ICD: {patient.icd_code}")
     if patient.diagnosis:
         lines.append(f"Rozpoznanie: {patient.diagnosis}")
     if patient.description:
-        lines.append(f"Opis: {patient.description[:800]}")
+        lines.append(f"Opis: {patient.description}")
     return "\n".join(lines)
 
 

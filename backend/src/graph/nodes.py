@@ -25,7 +25,9 @@ REWRITE_SYSTEM = (
     "skróty i zaimki (np. „u tego pacjenta” zastąp rozpoznaniem z kontekstu), dodaj kluczowe "
     "terminy medyczne i kody ICD z kontekstu pacjenta. Ustal opcjonalne filtry: category ∈ "
     '["disorder","icd","technique","diagnostics"] oraz audience ∈ ["children","adults"] – '
-    "tylko gdy pytanie jednoznacznie tego dotyczy, w przeciwnym razie null. Zwróć WYŁĄCZNIE "
+    "tylko gdy pytanie jednoznacznie tego dotyczy, w przeciwnym razie null. Znaczniki w nawiasach "
+    "kwadratowych (np. [IMIĘ PACJENTA], [TELEFON]) to zanonimizowane dane – nie umieszczaj ich w "
+    "zapytaniu. Zwróć WYŁĄCZNIE "
     'obiekt JSON: {"query": "...", "filters": {"category": null, "audience": null}}'
 )
 
@@ -36,7 +38,11 @@ ANSWER_SYSTEM = (
     "pochodzi. Nie zmyślaj faktów, dawek ani kodów; jeśli źródła nie wystarczają, powiedz to "
     "wprost i oznacz, które części odpowiedzi wykraczają poza źródła. Jesteś narzędziem "
     "wspierającym – ostateczne decyzje kliniczne należą do lekarza. Gdy wskazane jest "
-    "skierowanie do innego specjalisty, zaznacz to."
+    "skierowanie do innego specjalisty, zaznacz to. Wykorzystaj wszystkie podane cechy pacjenta "
+    "(wiek, płeć, rozpoznanie, opis). Dane osobowe są zanonimizowane: znaczniki takie jak "
+    "[IMIĘ PACJENTA], [IMIĘ PACJENTKI], [NAZWISKO], [PESEL], [TELEFON], [ADRES] traktuj jak "
+    "zwykłe odniesienia (płeć wynika ze znacznika imienia); nie komentuj anonimizacji, nie proś "
+    "o te dane i nie powtarzaj znaczników bez potrzeby."
 )
 
 LOW_RELEVANCE_NOTE = (
