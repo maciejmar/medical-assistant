@@ -23,6 +23,7 @@ const PALETTE = ['#237d75', '#4f7cff', '#f59e0b', '#e4572e', '#8b5cf6', '#14b8a6
         <p class="text-sm text-slate-500">Metryki zużycia zasobów i zarządzanie kontami.</p>
       </div>
       <div class="flex items-center gap-2">
+        <a routerLink="/admin/knowledge" class="btn-secondary">Baza wiedzy</a>
         <a routerLink="/admin/llm" class="btn-secondary">Log zapytań LLM</a>
         <label class="text-xs font-semibold uppercase text-slate-500" for="range">Zakres</label>
         <select id="range" class="field !w-auto" [value]="days()" (change)="setDays($any($event.target).value)">

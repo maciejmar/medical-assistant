@@ -172,6 +172,47 @@ class LlmCall(SQLModel, table=True):
     duration_ms: int = Field(default=0)
 
 
+class KbDocument(SQLModel, table=True):
+    """Plik wgrany przez administratora do bazy wiedzy. Tekst jest przechowywany, żeby można
+    było odtworzyć indeks Qdrant (np. po zmianie modelu embeddingów)."""
+
+    __tablename__ = "kb_documents"
+
+    id: int | None = Field(default=None, primary_key=True)
+    title: str = Field(max_length=300)
+    filename: str = Field(max_length=300)
+    category: str = Field(max_length=30)
+    audience: str = Field(max_length=20)
+    icd10: str = Field(default="", max_length=50)
+    icd11: str = Field(default="", max_length=50)
+    tags: str = Field(default="", max_length=500)
+    text: str = Field(sa_column=Column(Text, nullable=False))
+    chunks: int = Field(default=0)
+    status: str = Field(default="pending", max_length=20)
+    error: str | None = Field(default=None, max_length=1000)
+    uploaded_by: int | None = Field(
+        default=None, sa_column=Column(Integer, ForeignKey("users.id"), nullable=True)
+    )
+    # Import z katalogu: ścieżka względna pliku/grupy zdjęć i suma kontrolna treści źródłowej –
+    # pozwalają pominąć niezmienione materiały przy kolejnym imporcie.
+    source_path: str | None = Field(default=None, max_length=500, index=True)
+    content_hash: str = Field(default="", max_length=64)
+    pages: int = Field(default=0)
+    created_at: datetime = _ts(index=True)
+    indexed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+
+
+class OcrPage(SQLModel, table=True):
+    """Pamięć podręczna OCR (klucz: SHA-256 obrazu) – każde zdjęcie rozpoznawane jest raz."""
+
+    __tablename__ = "kb_ocr_pages"
+
+    sha256: str = Field(primary_key=True, max_length=64)
+    text: str = Field(sa_column=Column(Text, nullable=False))
+    confidence: float = Field(default=0.0)
+    created_at: datetime = _ts()
+
+
 engine = create_async_engine(settings.db_url, pool_pre_ping=True)
 session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

@@ -22,8 +22,10 @@ import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from sqlmodel import SQLModel  # noqa: E402
 
+from src import knowledge  # noqa: E402
 from src.auth import hash_password  # noqa: E402
 from src.database import Role, User, engine, session_factory  # noqa: E402
+from src.llm import Usage  # noqa: E402
 from src.main import create_app  # noqa: E402
 
 
@@ -69,3 +71,29 @@ def make_headers(client):
         return await login_headers(client, email, "Password123!")
 
     return factory
+
+
+@pytest.fixture
+def fake_index(monkeypatch):
+    """Podstawia embeddingi i Qdrant – fragmenty bazy wiedzy trafiają do słownika."""
+    stored: dict[str, dict] = {}
+
+    async def fake_embed(texts, *, user_id, operation):
+        return [[0.1, 0.2] for _ in texts], Usage()
+
+    async def ensure_collection(dimension):
+        return None
+
+    async def upsert(points):
+        for point_id, _vector, _text, payload in points:
+            stored[point_id] = payload
+
+    async def delete_kb_document(document_id):
+        for key in [k for k, p in stored.items() if p["kb_document_id"] == document_id]:
+            del stored[key]
+
+    monkeypatch.setattr(knowledge, "embed", fake_embed)
+    monkeypatch.setattr(knowledge.vector_store, "ensure_collection", ensure_collection)
+    monkeypatch.setattr(knowledge.vector_store, "upsert", upsert)
+    monkeypatch.setattr(knowledge.vector_store, "delete_kb_document", delete_kb_document)
+    return stored

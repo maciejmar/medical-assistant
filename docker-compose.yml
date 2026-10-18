@@ -40,6 +40,8 @@ services:
         condition: service_started
     volumes:
       - model_cache:/models
+      # Katalog z materiałami bazy wiedzy RAG (zapis: wgrywanie folderów w panelu admina).
+      - ${KB_SOURCE_HOST_DIR:-../laryngolog}:/kb
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:

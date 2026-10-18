@@ -1,5 +1,8 @@
 """Automatyczne zasilanie bazy Qdrant danymi logopedycznymi (idempotentne).
 
+Po zasileniu dokumentów wbudowanych odtwarzane są też pliki wgrane przez administratora
+(tekst przechowywany w tabeli kb_documents).
+
 Uruchomienie ręczne: python -m src.seed [--force]
 """
 
@@ -9,6 +12,7 @@ import sys
 import uuid
 
 from .config import settings
+from .database import init_db
 from .llm import drain_background_tasks, embed
 from .seed_data import DOCUMENTS
 from .vector_store import vector_store
@@ -64,6 +68,10 @@ async def seed_knowledge_base(force: bool = False) -> int:
         )
         inserted += len(batch)
     logger.info("Zasilono bazę wiedzy: %d dokumentów", inserted)
+
+    from .knowledge import reindex_uploaded  # import lokalny: knowledge korzysta z tego modułu
+
+    await reindex_uploaded()
     return inserted
 
 
@@ -89,6 +97,7 @@ async def seed_with_retries() -> None:
 
 async def _main() -> None:
     logging.basicConfig(level=logging.INFO)
+    await init_db()
     await seed_knowledge_base(force="--force" in sys.argv)
     await drain_background_tasks()
     await vector_store.close()

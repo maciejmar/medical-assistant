@@ -45,6 +45,14 @@ export const routes: Routes = [
       import('./features/admin-panel/llm-logs.component').then((m) => m.LlmLogsComponent),
   },
   {
+    path: 'admin/knowledge',
+    canActivate: [adminGuard],
+    loadComponent: () =>
+      import('./features/admin-panel/knowledge-base.component').then(
+        (m) => m.KnowledgeBaseComponent,
+      ),
+  },
+  {
     path: 'patient',
     canActivate: [patientGuard],
     loadComponent: () =>

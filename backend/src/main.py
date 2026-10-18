@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +11,8 @@ from .api.router import api_router
 from .auth import hash_password
 from .config import settings
 from .database import Role, User, init_db, session_factory
+from .kb_import import job as import_job
+from .kb_import import watch_directory
 from .llm import drain_background_tasks, purge_old_llm_calls
 from .seed import seed_with_retries
 from .vector_store import reranker, vector_store
@@ -49,9 +52,17 @@ async def lifespan(_: FastAPI):
     background: list[asyncio.Task] = [asyncio.create_task(reranker.warmup())]
     if settings.seed_on_startup:
         background.append(asyncio.create_task(seed_with_retries()))
+    if settings.kb_scan_interval_seconds > 0:
+        background.append(
+            asyncio.create_task(
+                watch_directory(Path(settings.kb_source_dir), settings.kb_scan_interval_seconds)
+            )
+        )
     try:
         yield
     finally:
+        if import_job.task is not None:
+            background.append(import_job.task)
         for task in background:
             task.cancel()
         await asyncio.gather(*background, return_exceptions=True)

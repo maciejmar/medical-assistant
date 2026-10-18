@@ -91,6 +91,24 @@ class VectorStore:
             wait=True,
         )
 
+    async def delete_kb_document(self, document_id: int) -> None:
+        """Usuwa wszystkie fragmenty pliku wgranego przez administratora."""
+        if not await self.client.collection_exists(self.collection):
+            return
+        await self.client.delete(
+            collection_name=self.collection,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="kb_document_id", match=models.MatchValue(value=document_id)
+                        )
+                    ]
+                )
+            ),
+            wait=True,
+        )
+
     async def hybrid_search(
         self,
         query: str,

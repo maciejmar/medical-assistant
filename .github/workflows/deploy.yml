@@ -70,7 +70,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
-            mkdir -p /opt/logoped-assist
+            mkdir -p /opt/logoped-assist /opt/logoped-kb
             cp /home/${{ secrets.SSH_USER }}/logoped-assist/docker-compose.prod.yml /opt/logoped-assist/docker-compose.yml
             cd /opt/logoped-assist
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin

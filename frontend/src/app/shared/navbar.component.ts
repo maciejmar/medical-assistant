@@ -36,6 +36,7 @@ import { AuthService } from '../core/auth.service';
           }
           @if (auth.isAdmin()) {
             <a routerLink="/admin" routerLinkActive="bg-brand-50 text-brand-700" [routerLinkActiveOptions]="{ exact: true }" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Panel administratora</a>
+            <a routerLink="/admin/knowledge" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Baza wiedzy</a>
             <a routerLink="/admin/llm" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Log LLM</a>
           }
           @if (auth.isPatient()) {

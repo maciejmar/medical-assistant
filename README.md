@@ -26,6 +26,44 @@ docker compose up --build
   system wraca do kolejności z wyszukiwania hybrydowego (RRF).
 - Nagrywanie mikrofonu działa tylko na `localhost` lub przez HTTPS (wymóg przeglądarek).
 
+## Baza wiedzy RAG – dodawanie materiałów
+
+Źródła wiedzy asystenta (wszystkie trafiają do Qdrant i są cytowane w odpowiedziach):
+
+- **hasła wbudowane** – `backend/src/seed_data.py` (zmiana wymaga wdrożenia),
+- **katalog z materiałami** – na serwerze `/opt/logoped-kb` (lokalnie domyślnie `../laryngolog`), montowany
+  w kontenerze backendu jako `/kb` (tylko do odczytu); ścieżkę hosta zmienia `KB_SOURCE_HOST_DIR`,
+- **pojedyncze pliki** wgrane w panelu *Baza wiedzy* (`/admin/knowledge`).
+
+### Gdy dochodzą nowe materiały
+
+1. Panel admina → *Baza wiedzy* → **Wgraj folder z komputera** → *Wyślij na serwer i zaindeksuj*. Pliki trafiają
+   do katalogu materiałów na serwerze (`/opt/logoped-kb/<nazwa folderu>/`), po czym startuje import.
+   Alternatywnie skopiuj pliki na serwer (np. `rsync -avh --partial ./laryngolog/ serwer:/opt/logoped-kb/`) –
+   aplikacja sama wykrywa nowe i zmienione pliki (co `KB_SCAN_INTERVAL_SECONDS`, domyślnie 5 min; import startuje,
+   gdy katalog przestanie się zmieniać).
+   - pliki tekstowe (PDF z warstwą tekstową, DOCX, ODT, MD, TXT) – każdy plik to jeden dokument,
+   - zdjęcia stron / zrzuty slajdów (JPG/PNG) – **każdy materiał w osobnym folderze** (folder = jeden dokument,
+     strony w kolejności wykonania zdjęć). Zdjęcia luzem w katalogu głównym są dzielone na dokumenty według sesji
+     fotografowania (przerwa > `KB_SESSION_GAP_MINUTES`, domyślnie 30 min).
+2. Import (OCR → podział na fragmenty → embeddingi → Qdrant) dodaje nowe i zmienione materiały, pomija niezmienione
+   i duplikaty (suma SHA-256; z kopii dokumentu tekstowego liczy się ta położona najpłycej). Ręcznie: przycisk
+   **Synchronizuj katalog** albo `docker compose exec backend python -m src.kb_import [--dry-run]`.
+3. Popraw w panelu tytuły i metadane (kategoria, grupa wiekowa, ICD, słowa kluczowe) – tytuł dokumentu ze zdjęć
+   jest brany z pierwszej linii rozpoznanego tekstu. Zmiany zostają przy kolejnych synchronizacjach.
+
+**OCR zdjęć:** Tesseract (lokalnie w kontenerze, obrazy nie opuszczają serwera), wyłącznie druk – słowa z niską
+pewnością rozpoznania (pismo odręczne) są odrzucane. Obrócone zdjęcia są wykrywane automatycznie. Wynik OCR każdego
+zdjęcia jest zapamiętywany (`kb_ocr_pages`), więc ponowna synchronizacja nie powtarza OCR. Pierwszy import kilkuset
+zdjęć trwa długo (kilka sekund na stronę).
+
+**Usuwanie:** dokument usunięty w panelu wróci przy kolejnej synchronizacji, jeśli jego plik nadal jest w katalogu –
+usuń też plik. Skany PDF bez warstwy tekstowej są odrzucane (zamiast nich użyj zdjęć stron albo transkrypcji `.md`).
+
+Tekst materiałów jest przechowywany w PostgreSQL (`kb_documents`), więc indeks można odtworzyć:
+`python -m src.seed --force` (lub automatycznie przy starcie na pustym Qdrant) indeksuje ponownie hasła wbudowane
+i wszystkie materiały. Nie umieszczaj w bazie wiedzy materiałów zawierających dane pacjentów.
+
 ## Architektura
 
 | Warstwa | Opis |

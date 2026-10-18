@@ -20,6 +20,9 @@ dependencies = [
     "pyjwt>=2.9.0",
     "bcrypt>=4.2.0",
     "python-multipart>=0.0.9",
+    "pypdf>=5.0.0",
+    "pillow>=10.4.0",
+    "pytesseract>=0.3.13",
 ]
 
 [dependency-groups]

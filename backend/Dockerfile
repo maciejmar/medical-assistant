@@ -11,6 +11,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HF_HOME=/models
+# OCR zdjęć stron do bazy wiedzy (tylko druk) – Tesseract z danymi języka polskiego.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-pol \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --uid 1000 app && mkdir -p /models && chown app:app /models
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv

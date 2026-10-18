@@ -2,6 +2,11 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  KbDocument,
+  KbDocumentPatch,
+  KbImportStatus,
+  KbUploadInput,
+  KnowledgeBase,
   LlmCallDetail,
   LlmCallPage,
   Role,
@@ -62,5 +67,49 @@ export class AdminService {
 
   llmCall(id: number): Observable<LlmCallDetail> {
     return this.http.get<LlmCallDetail>(`/api/admin/llm-calls/${id}`);
+  }
+
+  knowledgeBase(): Observable<KnowledgeBase> {
+    return this.http.get<KnowledgeBase>('/api/admin/knowledge');
+  }
+
+  uploadKnowledge(input: KbUploadInput): Observable<KbDocument> {
+    const form = new FormData();
+    form.append('file', input.file, input.file.name);
+    form.append('title', input.title);
+    form.append('category', input.category);
+    form.append('audience', input.audience);
+    form.append('icd10', input.icd10);
+    form.append('icd11', input.icd11);
+    form.append('tags', input.tags);
+    return this.http.post<KbDocument>('/api/admin/knowledge', form);
+  }
+
+  updateKnowledge(id: number, patch: KbDocumentPatch): Observable<KbDocument> {
+    return this.http.patch<KbDocument>(`/api/admin/knowledge/${id}`, patch);
+  }
+
+  /** Zapisuje plik w katalogu bazy wiedzy na serwerze (ścieżka względna, np. z wgrywanego folderu). */
+  storeKnowledgeFile(file: File, relativePath: string): Observable<{ path: string; changed: boolean }> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    form.append('relative_path', relativePath);
+    return this.http.post<{ path: string; changed: boolean }>('/api/admin/knowledge/files', form);
+  }
+
+  importStatus(): Observable<KbImportStatus> {
+    return this.http.get<KbImportStatus>('/api/admin/knowledge/import');
+  }
+
+  startImport(): Observable<KbImportStatus> {
+    return this.http.post<KbImportStatus>('/api/admin/knowledge/import', {});
+  }
+
+  reindexKnowledge(id: number): Observable<KbDocument> {
+    return this.http.post<KbDocument>(`/api/admin/knowledge/${id}/reindex`, {});
+  }
+
+  deleteKnowledge(id: number): Observable<void> {
+    return this.http.delete<void>(`/api/admin/knowledge/${id}`);
   }
 }

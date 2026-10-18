@@ -249,3 +249,58 @@ class PatientPortalOut(BaseModel):
     doctor_email: str
     recommendations: list[RecommendationOut]
     notifications: list[NotificationOut]
+
+
+class KbDocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    filename: str
+    category: str
+    audience: str
+    icd10: str
+    icd11: str
+    tags: str
+    chunks: int
+    status: str
+    error: str | None
+    created_at: datetime
+    indexed_at: datetime | None
+    source_path: str | None
+    pages: int
+    characters: int
+    preview: str
+
+
+class KbDocumentPatch(BaseModel):
+    title: str = Field(min_length=2, max_length=300)
+    category: Literal["disorder", "icd", "technique", "diagnostics"]
+    audience: Literal["children", "adults", "all"]
+    icd10: str = Field(default="", max_length=50)
+    icd11: str = Field(default="", max_length=50)
+    tags: str = Field(default="", max_length=500)
+
+
+class KbImportStatusOut(BaseModel):
+    source_dir: str
+    source_available: bool
+    running: bool
+    started_at: datetime | None
+    finished_at: datetime | None
+    current: str
+    summary: str
+    failed: list[str]
+    error: str | None
+    trigger: str
+    auto_scan_seconds: int
+
+
+class KbStoredFileOut(BaseModel):
+    path: str
+    changed: bool
+
+
+class KnowledgeBaseOut(BaseModel):
+    builtin_documents: int
+    documents: list[KbDocumentOut]

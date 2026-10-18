@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     rerank_top_n: int = 4
     rerank_min_score: float = 0.02
     rerank_fallback_n: int = 2
+    kb_max_upload_bytes: int = 20 * 1024 * 1024
+    kb_chunk_chars: int = 1500
+    kb_source_dir: str = "/kb"
+    kb_session_gap_minutes: int = 30
+    # Automatyczne wykrywanie nowych/zmienionych plików w katalogu (0 = wyłączone).
+    kb_scan_interval_seconds: int = 300
+    ocr_languages: str = "pol+eng"
+    ocr_min_word_confidence: int = 60
+    ocr_max_side_px: int = 2600
     history_window: int = 10
 
     llm_log_enabled: bool = True

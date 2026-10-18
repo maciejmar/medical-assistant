@@ -127,6 +127,68 @@ export interface SystemStats {
   knowledge_base_documents: number | null;
 }
 
+export type KbCategory = 'disorder' | 'icd' | 'technique' | 'diagnostics';
+export type KbAudience = 'children' | 'adults' | 'all';
+
+export interface KbDocument {
+  id: number;
+  title: string;
+  filename: string;
+  category: KbCategory;
+  audience: KbAudience;
+  icd10: string;
+  icd11: string;
+  tags: string;
+  chunks: number;
+  status: 'pending' | 'indexed' | 'error';
+  error: string | null;
+  created_at: string;
+  indexed_at: string | null;
+  /** Ścieżka w katalogu źródłowym (import) – null dla plików wgranych w panelu. */
+  source_path: string | null;
+  pages: number;
+  characters: number;
+  preview: string;
+}
+
+export interface KbDocumentPatch {
+  title: string;
+  category: KbCategory;
+  audience: KbAudience;
+  icd10: string;
+  icd11: string;
+  tags: string;
+}
+
+export interface KbImportStatus {
+  source_dir: string;
+  source_available: boolean;
+  running: boolean;
+  started_at: string | null;
+  finished_at: string | null;
+  current: string;
+  summary: string;
+  failed: string[];
+  error: string | null;
+  trigger: string;
+  auto_scan_seconds: number;
+}
+
+export interface KnowledgeBase {
+  builtin_documents: number;
+  documents: KbDocument[];
+}
+
+export interface KbUploadInput {
+  file: File;
+  title: string;
+  category: KbCategory;
+  audience: KbAudience;
+  icd10: string;
+  icd11: string;
+  tags: string;
+}
+
 export interface UserCreateInput {
   email: string;
   full_name: string;
