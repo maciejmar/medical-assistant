@@ -139,14 +139,30 @@ async def rewrite_query(state: ChatState) -> dict[str, Any]:
     }
 
 
+def merge_candidates(*groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Łączy wyniki kilku wyszukiwań bez duplikatów (kolejność: pierwsze wystąpienie)."""
+    seen: set[str] = set()
+    merged: list[dict[str, Any]] = []
+    for group in groups:
+        for doc in group:
+            if doc["id"] not in seen:
+                seen.add(doc["id"])
+                merged.append(doc)
+    return merged
+
+
 async def retrieve(state: ChatState) -> dict[str, Any]:
     _stage("retrieve")
     query = state["rewritten_query"]
     vectors, usage = await llm.embed([query], user_id=state["user_id"], operation="embedding_query")
     filters = state.get("filters") or {}
-    docs = await vector_store.hybrid_search(query, vectors[0], filters=filters)
-    if not docs and filters:
-        docs = await vector_store.hybrid_search(query, vectors[0], filters=None)
+    docs = await vector_store.hybrid_search(query, vectors[0], filters=None)
+    if filters:
+        # Filtr kategorii/grupy tylko wzmacnia pasujące dokumenty, nie wyklucza pozostałych –
+        # materiały z bazy wiedzy (np. książka o terapii) często obejmują kilka kategorii naraz.
+        # O kolejności decyduje reranker.
+        filtered = await vector_store.hybrid_search(query, vectors[0], filters=filters)
+        docs = merge_candidates(filtered, docs)
     total = usage.as_dict()
     if not docs and query != state["question"]:
         fallback = with_clinical_terms(state["question"], state.get("patient_context"))

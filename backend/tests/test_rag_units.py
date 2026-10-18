@@ -141,3 +141,33 @@ def test_low_relevance_documents_are_kept_and_flagged():
     state = {"question": "q", "documents": fallback}
     messages = build_answer_messages(state, grounded=True)
     assert "luźno związane" in messages[0]["content"]
+
+
+async def test_category_filter_does_not_exclude_other_documents(monkeypatch):
+    from src.graph import nodes
+    from src.llm import Usage
+
+    technique = {"id": "a", "title": "Przodozgryz – książka", "category": "technique"}
+    disorder = {"id": "b", "title": "Dyzartria", "category": "disorder"}
+    calls = []
+
+    async def fake_embed(texts, *, user_id, operation):
+        return [[0.1]], Usage()
+
+    async def fake_search(query, dense, *, filters=None, limit=None):
+        calls.append(filters)
+        return [disorder] if filters else [technique, disorder]
+
+    monkeypatch.setattr(nodes.llm, "embed", fake_embed)
+    monkeypatch.setattr(nodes.vector_store, "hybrid_search", fake_search)
+    monkeypatch.setattr(nodes, "get_stream_writer", lambda: lambda _: None)
+
+    state = {
+        "user_id": 1,
+        "question": "przodozgryz",
+        "rewritten_query": "przodozgryz",
+        "filters": {"category": "disorder"},
+    }
+    result = await nodes.retrieve(state)
+    assert [d["id"] for d in result["candidates"]] == ["b", "a"]
+    assert calls == [None, {"category": "disorder"}]
