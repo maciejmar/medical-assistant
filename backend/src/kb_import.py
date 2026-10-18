@@ -19,6 +19,7 @@ import logging
 import os
 import re
 import sys
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -26,7 +27,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from PIL import Image
-from sqlmodel import select
+from sqlmodel import col, select
 
 from .config import settings
 from .database import KbDocument, OcrPage, init_db, session_factory
@@ -274,8 +275,95 @@ def title_from_text(text: str, fallback: str) -> str:
     return fallback
 
 
+@dataclass
+class ImportProgress:
+    """Postęp importu dla panelu administratora (OCR → embedding, ważony liczbą stron)."""
+
+    phase: str = "idle"  # scan | ocr | extract | embed | done
+    started: float = field(default_factory=time.monotonic)
+    units_total: int = 0  # dokumenty nowe/zmienione do przetworzenia
+    units_done: int = 0
+    unchanged: int = 0
+    created: int = 0
+    updated: int = 0
+    failed: int = 0
+    work_total: float = 0.0
+    work_done: float = 0.0
+    unit_title: str = ""
+    unit_path: str = ""
+    unit_kind: str = ""
+    unit_weight: float = 0.0
+    unit_fraction: float = 0.0
+    step_done: int = 0  # strony OCR albo fragmenty embeddingu bieżącego dokumentu
+    step_total: int = 0
+    recent: list[dict] = field(default_factory=list)
+
+    # Udział etapów w pracy nad dokumentem: zdjęcia – głównie OCR, pliki – głównie embedding.
+    _OCR_SHARE = 0.85
+    _EXTRACT_SHARE = 0.2
+
+    @staticmethod
+    def weight(unit: ImportUnit) -> float:
+        return float(len(unit.files)) if unit.kind == "images" else 2.0
+
+    def begin(self, unit: ImportUnit) -> None:
+        self.unit_path, self.unit_kind = unit.source_path, unit.kind
+        self.unit_title = unit.title_hint
+        self.unit_weight, self.unit_fraction = self.weight(unit), 0.0
+        self.phase = "ocr" if unit.kind == "images" else "extract"
+        self.step_done, self.step_total = 0, len(unit.files) if unit.kind == "images" else 1
+
+    def on_page(self, done: int, total: int) -> None:
+        self.step_done, self.step_total = done, total
+        self.unit_fraction = self._OCR_SHARE * done / max(total, 1)
+
+    def on_chunks(self, done: int, total: int) -> None:
+        self.phase = "embed"
+        self.step_done, self.step_total = done, total
+        base = self._OCR_SHARE if self.unit_kind == "images" else self._EXTRACT_SHARE
+        self.unit_fraction = base + (1 - base) * done / max(total, 1)
+
+    def finish(self, status: str, title: str, chunks: int = 0, error: str | None = None) -> None:
+        self.units_done += 1
+        self.work_done += self.unit_weight
+        self.unit_fraction = 0.0
+        setattr(self, status, getattr(self, status) + 1)
+        self.recent.insert(
+            0,
+            {
+                "path": self.unit_path,
+                "title": title,
+                "status": status,
+                "pages": int(self.unit_weight) if self.unit_kind == "images" else 0,
+                "chunks": chunks,
+                "error": error,
+            },
+        )
+        del self.recent[10:]
+
+    @property
+    def fraction(self) -> float:
+        if self.phase == "done":
+            return 1.0
+        if not self.work_total:
+            return 0.0
+        current = self.unit_weight * self.unit_fraction
+        return min(1.0, (self.work_done + current) / self.work_total)
+
+    @property
+    def elapsed_seconds(self) -> int:
+        return int(time.monotonic() - self.started)
+
+    @property
+    def eta_seconds(self) -> int | None:
+        """Szacunek na podstawie dotychczasowego tempa (po przerobieniu min. 3% pracy)."""
+        if self.phase in ("done", "scan") or self.fraction < 0.03:
+            return None
+        return int(self.elapsed_seconds * (1 - self.fraction) / self.fraction)
+
+
 async def unit_text(
-    unit: ImportUnit, progress: Callable[[str], None] | None = None
+    unit: ImportUnit, on_page: Callable[[int, int], None] | None = None
 ) -> tuple[str, str]:
     """Zwraca (tekst, proponowany tytuł) dla pliku lub grupy zdjęć."""
     if unit.kind == "file":
@@ -285,12 +373,13 @@ async def unit_text(
         )
         return text, unit.title_hint
     pages = []
+    total = len(unit.files)
     for number, source in enumerate(unit.files, start=1):
-        if progress:
-            progress(f"OCR {source.relative} ({number}/{len(unit.files)})")
         page = await _ocr_cached(source)
         if len(page.text) >= 20:
             pages.append(f"# Strona {number}\n\n{page.text}")
+        if on_page:
+            on_page(number, total)
     if not pages:
         raise ExtractionError("Na zdjęciach nie rozpoznano drukowanego tekstu.")
     text = "\n\n".join(pages)
@@ -302,33 +391,58 @@ async def import_directory(
     root: Path,
     *,
     dry_run: bool = False,
-    progress: Callable[[str], None] | None = None,
+    progress: ImportProgress | None = None,
+    log: Callable[[str], None] | None = None,
 ) -> ImportReport:
     if not root.is_dir():
         raise FileNotFoundError(f"Katalog {root} nie istnieje (ustaw KB_SOURCE_DIR / wolumen /kb)")
+    progress = progress or ImportProgress()
+    progress.phase = "scan"
     report = ImportReport()
     units = await asyncio.to_thread(plan_units, root, report)
-    for position, unit in enumerate(units, start=1):
-        if progress:
-            progress(f"[{position}/{len(units)}] {unit.source_path}")
-        async with session_factory() as session:
-            existing = (
+
+    async with session_factory() as session:
+        known = {
+            d.source_path: d
+            for d in (
                 await session.exec(
-                    select(KbDocument).where(KbDocument.source_path == unit.source_path)
+                    select(KbDocument).where(col(KbDocument.source_path).is_not(None))
                 )
-            ).first()
-        if existing is not None and existing.content_hash == unit.content_hash:
+            ).all()
+        }
+    pending = []
+    for unit in units:
+        existing = known.get(unit.source_path)
+        # Pomijamy tylko dokumenty zaindeksowane w całości – przerwany import (np. restart przy
+        # wdrożeniu) albo błąd indeksowania są ponawiane; OCR stron i tak jest w pamięci podręcznej.
+        if (
+            existing is not None
+            and existing.content_hash == unit.content_hash
+            and existing.status == "indexed"
+        ):
             report.unchanged.append(unit.source_path)
-            continue
+        else:
+            pending.append(unit)
+    progress.unchanged = len(report.unchanged)
+    progress.units_total = len(pending)
+    progress.work_total = sum(ImportProgress.weight(u) for u in pending)
+
+    for position, unit in enumerate(pending, start=1):
+        existing = known.get(unit.source_path)
+        if log:
+            log(f"[{position}/{len(pending)}] {unit.source_path}")
         if dry_run:
             (report.updated if existing else report.created).append(unit.source_path)
             continue
+        progress.begin(unit)
         try:
-            text, title = await unit_text(unit, progress)
+            text, title = await unit_text(unit, progress.on_page)
         except Exception as exc:
             logger.warning("Import %s nie powiódł się: %s", unit.source_path, exc)
             report.failed.append(f"{unit.source_path}: {exc}")
+            progress.finish("failed", unit.title_hint, error=str(exc))
             continue
+        progress.unit_title = existing.title if existing else title
 
         doc = existing or KbDocument(
             title=title[:300],
@@ -345,11 +459,14 @@ async def import_directory(
             doc = await session.merge(doc)
             await session.commit()
             await session.refresh(doc)
-        doc = await index_and_record(doc)
+        doc = await index_and_record(doc, progress.on_chunks)
         if doc.status != "indexed":
             report.failed.append(f"{unit.source_path}: {doc.error}")
+            progress.finish("failed", doc.title, error=doc.error)
         else:
             (report.updated if existing else report.created).append(unit.source_path)
+            progress.finish("updated" if existing else "created", doc.title, chunks=doc.chunks)
+    progress.phase = "done"
     return report
 
 
@@ -360,7 +477,7 @@ class ImportJob:
     running: bool = False
     started_at: datetime | None = None
     finished_at: datetime | None = None
-    current: str = ""
+    progress: ImportProgress = field(default_factory=ImportProgress)
     summary: str = ""
     failed: list[str] = field(default_factory=list)
     error: str | None = None
@@ -380,17 +497,16 @@ def start_background_import(root: Path, trigger: str = "panel") -> bool:
     async def run() -> None:
         try:
             job.imported_fingerprint = await asyncio.to_thread(directory_fingerprint, root)
-            report = await import_directory(
-                root, progress=lambda message: setattr(job, "current", message)
-            )
+            report = await import_directory(root, progress=job.progress)
             job.summary, job.failed = report.summary(), report.failed
         except Exception as exc:
             logger.exception("Import katalogu bazy wiedzy nie powiódł się")
             job.error = str(exc)
         finally:
-            job.running, job.finished_at, job.current = False, datetime.now(), ""
+            job.running, job.finished_at = False, datetime.now()
 
     job.running, job.started_at, job.finished_at, job.trigger = True, datetime.now(), None, trigger
+    job.progress = ImportProgress()
     job.summary, job.failed, job.error = "", [], None
     job.task = asyncio.create_task(run())
     return True
@@ -425,7 +541,7 @@ async def _main(argv: list[str]) -> None:
     args = [a for a in argv if not a.startswith("--")]
     root = Path(args[0] if args else settings.kb_source_dir)
     await init_db()
-    report = await import_directory(root, dry_run="--dry-run" in argv, progress=logger.info)
+    report = await import_directory(root, dry_run="--dry-run" in argv, log=logger.info)
     for label, items in (("Nowe", report.created), ("Zaktualizowane", report.updated)):
         for item in items:
             logger.info("%s: %s", label, item)

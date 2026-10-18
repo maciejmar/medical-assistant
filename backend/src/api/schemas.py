@@ -282,13 +282,41 @@ class KbDocumentPatch(BaseModel):
     tags: str = Field(default="", max_length=500)
 
 
+class KbImportRecentOut(BaseModel):
+    path: str
+    title: str
+    status: Literal["created", "updated", "failed"]
+    pages: int
+    chunks: int
+    error: str | None
+
+
+class KbImportProgressOut(BaseModel):
+    phase: Literal["idle", "scan", "ocr", "extract", "embed", "done"]
+    fraction: float
+    elapsed_seconds: int
+    eta_seconds: int | None
+    units_total: int
+    units_done: int
+    unchanged: int
+    created: int
+    updated: int
+    failed: int
+    unit_title: str
+    unit_path: str
+    unit_kind: str
+    step_done: int
+    step_total: int
+    recent: list[KbImportRecentOut]
+
+
 class KbImportStatusOut(BaseModel):
     source_dir: str
     source_available: bool
     running: bool
     started_at: datetime | None
     finished_at: datetime | None
-    current: str
+    progress: KbImportProgressOut
     summary: str
     failed: list[str]
     error: str | None

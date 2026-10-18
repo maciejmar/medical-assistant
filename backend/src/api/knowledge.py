@@ -18,6 +18,7 @@ from ..vector_store import vector_store
 from .schemas import (
     KbDocumentOut,
     KbDocumentPatch,
+    KbImportProgressOut,
     KbImportStatusOut,
     KbStoredFileOut,
     KnowledgeBaseOut,
@@ -98,13 +99,32 @@ async def upload_document(
 
 
 def _import_status() -> KbImportStatusOut:
+    p = job.progress
+    progress = KbImportProgressOut(
+        phase=p.phase,  # type: ignore[arg-type]
+        fraction=round(p.fraction, 4),
+        elapsed_seconds=p.elapsed_seconds,
+        eta_seconds=p.eta_seconds,
+        units_total=p.units_total,
+        units_done=p.units_done,
+        unchanged=p.unchanged,
+        created=p.created,
+        updated=p.updated,
+        failed=p.failed,
+        unit_title=p.unit_title,
+        unit_path=p.unit_path,
+        unit_kind=p.unit_kind,
+        step_done=p.step_done,
+        step_total=p.step_total,
+        recent=p.recent,  # type: ignore[arg-type]
+    )
     return KbImportStatusOut(
         source_dir=settings.kb_source_dir,
         source_available=Path(settings.kb_source_dir).is_dir(),
         running=job.running,
         started_at=job.started_at,
         finished_at=job.finished_at,
-        current=job.current,
+        progress=progress,
         summary=job.summary,
         failed=job.failed,
         error=job.error,

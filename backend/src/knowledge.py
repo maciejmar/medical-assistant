@@ -11,6 +11,7 @@ import io
 import logging
 import re
 import zipfile
+from collections.abc import Callable
 from xml.etree import ElementTree
 
 from pypdf import PdfReader
@@ -215,11 +216,16 @@ def _payload(doc: KbDocument, chunk: str, index: int, total: int) -> dict:
     }
 
 
-async def index_document(doc: KbDocument) -> int:
+ChunkProgress = Callable[[int, int], None]  # (fragmenty gotowe, fragmenty łącznie)
+
+
+async def index_document(doc: KbDocument, on_progress: ChunkProgress | None = None) -> int:
     """(Re)indeksuje dokument w Qdrant; zwraca liczbę fragmentów."""
     chunks = chunk_text(doc.text, settings.kb_chunk_chars)
     await vector_store.delete_kb_document(doc.id)  # type: ignore[arg-type]
     total = len(chunks)
+    if on_progress:
+        on_progress(0, total)
     for start in range(0, total, _BATCH):
         payloads = [
             _payload(doc, chunk, start + i + 1, total)
@@ -234,13 +240,15 @@ async def index_document(doc: KbDocument) -> int:
                 for p, vector, text in zip(payloads, vectors, texts, strict=True)
             ]
         )
+        if on_progress:
+            on_progress(min(start + _BATCH, total), total)
     return total
 
 
-async def index_and_record(doc: KbDocument) -> KbDocument:
+async def index_and_record(doc: KbDocument, on_progress: ChunkProgress | None = None) -> KbDocument:
     """Indeksuje i zapisuje wynik (status/błąd) w bazie – błąd vLLM/Qdrant nie gubi pliku."""
     try:
-        doc.chunks = await index_document(doc)
+        doc.chunks = await index_document(doc, on_progress)
         doc.status, doc.error, doc.indexed_at = "indexed", None, utcnow()
     except asyncio.CancelledError:
         raise

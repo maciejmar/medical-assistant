@@ -160,13 +160,43 @@ export interface KbDocumentPatch {
   tags: string;
 }
 
+export type KbImportPhase = 'idle' | 'scan' | 'ocr' | 'extract' | 'embed' | 'done';
+
+export interface KbImportRecent {
+  path: string;
+  title: string;
+  status: 'created' | 'updated' | 'failed';
+  pages: number;
+  chunks: number;
+  error: string | null;
+}
+
+export interface KbImportProgress {
+  phase: KbImportPhase;
+  fraction: number;
+  elapsed_seconds: number;
+  eta_seconds: number | null;
+  units_total: number;
+  units_done: number;
+  unchanged: number;
+  created: number;
+  updated: number;
+  failed: number;
+  unit_title: string;
+  unit_path: string;
+  unit_kind: string;
+  step_done: number;
+  step_total: number;
+  recent: KbImportRecent[];
+}
+
 export interface KbImportStatus {
   source_dir: string;
   source_available: boolean;
   running: boolean;
   started_at: string | null;
   finished_at: string | null;
-  current: string;
+  progress: KbImportProgress;
   summary: string;
   failed: string[];
   error: string | null;

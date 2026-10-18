@@ -6,9 +6,10 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AdminService } from '../../core/admin.service';
 import { KbAudience, KbCategory, KbDocument, KbImportStatus } from '../../shared/models';
+import { ImportProgressComponent, UploadState } from './import-progress.component';
 
 const ACCEPT = '.pdf,.docx,.odt,.md,.txt,.jpg,.jpeg,.png';
-const POLL_MS = 3000;
+const POLL_MS = 2000;
 
 export const CATEGORY_LABELS: Record<KbCategory, string> = {
   technique: 'Techniki terapii',
@@ -43,7 +44,7 @@ function apiError(err: unknown, fallback: string): string {
 @Component({
   selector: 'app-knowledge-base',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, DatePipe, DecimalPipe],
+  imports: [ReactiveFormsModule, RouterLink, DatePipe, DecimalPipe, ImportProgressComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mb-6">
@@ -75,20 +76,6 @@ function apiError(err: unknown, fallback: string): string {
           {{ importStatus()?.running ? 'Synchronizacja trwa…' : 'Synchronizuj katalog' }}
         </button>
       </div>
-      @if (importStatus(); as st) {
-        @if (st.running) {
-          <p class="mt-3 animate-pulse text-sm text-brand-700">{{ st.current || 'Przygotowanie…' }}</p>
-          <p class="text-xs text-slate-500">Pierwszy import zdjęć potrwa długo (OCR kilka sekund na stronę). Możesz zamknąć tę stronę – import działa w tle.</p>
-        } @else if (st.finished_at) {
-          <p class="mt-3 text-sm" [class.text-red-600]="st.error" [class.text-brand-700]="!st.error">
-            Ostatnia synchronizacja {{ st.finished_at | date: 'dd.MM.yyyy HH:mm' }}: {{ st.error || st.summary }}
-          </p>
-          @for (f of st.failed; track f) {
-            <p class="text-xs text-red-600">{{ f }}</p>
-          }
-        }
-      }
-
       <div class="mt-4 rounded-lg border border-dashed border-slate-300 p-3">
         <label class="label" for="kb-folder">Wgraj folder z komputera</label>
         <div class="flex flex-wrap items-center gap-3">
@@ -105,19 +92,12 @@ function apiError(err: unknown, fallback: string): string {
             @if (folderSkipped()) { · pominięto nieobsługiwanych: {{ folderSkipped() }} }
           </p>
         }
-        @if (folderUploading() || folderDone()) {
-          <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-            <div class="h-full bg-brand-600 transition-all" [style.width.%]="folderProgress()"></div>
-          </div>
-          <p class="mt-1 text-xs text-slate-500">
-            {{ folderDone() }} / {{ folderTotal() }}
-            @if (folderErrors().length) { · błędy: {{ folderErrors().length }} }
-          </p>
-          @for (e of folderErrors(); track e) {
-            <p class="text-xs text-red-600">{{ e }}</p>
-          }
+        @for (e of folderErrors(); track e) {
+          <p class="mt-1 text-xs text-red-600">{{ e }}</p>
         }
       </div>
+
+      <app-import-progress [status]="importStatus()" [upload]="uploadState()" />
     </section>
 
     <form class="card mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" [formGroup]="form" (ngSubmit)="upload(fileInput)">
@@ -278,9 +258,12 @@ export class KnowledgeBaseComponent {
   protected readonly folderMegabytes = computed(
     () => this.folderFiles().reduce((sum, f) => sum + f.size, 0) / 1_000_000,
   );
-  protected readonly folderProgress = computed(() =>
-    this.folderTotal() ? (100 * this.folderDone()) / this.folderTotal() : 0,
-  );
+  protected readonly uploadState = computed<UploadState>(() => ({
+    active: this.folderUploading(),
+    done: this.folderDone(),
+    total: this.folderTotal(),
+    errors: this.folderErrors().length,
+  }));
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
     title: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(300)]],

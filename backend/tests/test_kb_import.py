@@ -248,3 +248,77 @@ async def test_folder_upload_endpoint(client, make_headers, tmp_path, monkeypatc
     assert (await upload(admin, "Logopeda-17-10-2026/IMG_1.png")).json()["changed"] is False
     assert (await upload(admin, "../poza.png")).status_code == 422
     assert (await upload(doctor, "Logopeda/IMG_2.png")).status_code == 403
+
+
+def test_progress_is_weighted_by_pages_and_phases():
+    from src.kb_import import ImportProgress, ImportUnit
+
+    book = ImportUnit("book/", "images", [None] * 8, "Książka")  # type: ignore[list-item]
+    pdf = ImportUnit("a.pdf", "file", [None], "Artykuł")  # type: ignore[list-item]
+    progress = ImportProgress(units_total=2, work_total=ImportProgress.weight(book) + 2)
+    progress.phase = "scan"
+    assert progress.fraction == 0 and progress.eta_seconds is None
+
+    progress.begin(book)
+    assert progress.phase == "ocr" and progress.step_total == 8
+    progress.on_page(4, 8)
+    assert round(progress.fraction, 3) == round(8 * 0.85 * 0.5 / 10, 3)
+    progress.on_chunks(10, 10)
+    assert progress.phase == "embed" and round(progress.fraction, 3) == 0.8
+    progress.finish("created", "Książka", chunks=10)
+    assert progress.units_done == 1 and progress.created == 1
+    assert progress.recent[0] == {
+        "path": "book/",
+        "title": "Książka",
+        "status": "created",
+        "pages": 8,
+        "chunks": 10,
+        "error": None,
+    }
+
+    progress.begin(pdf)
+    assert progress.phase == "extract"
+    progress.on_chunks(1, 2)
+    assert 0.8 < progress.fraction < 1
+    progress.finish("failed", "Artykuł", error="błąd")
+    progress.phase = "done"
+    assert progress.fraction == 1 and progress.failed == 1
+
+
+async def test_import_reports_progress(tmp_path, fake_index, monkeypatch):
+    from src.kb_import import ImportProgress
+
+    _build_tree(tmp_path)
+    monkeypatch.setattr(
+        kb_import, "ocr_image", lambda data: OcrResult("Ćwiczenia języka i warg.", 90.0, 4)
+    )
+    progress = ImportProgress()
+    await import_directory(tmp_path, progress=progress)
+    assert progress.phase == "done" and progress.fraction == 1
+    assert progress.units_total == progress.units_done == progress.created == 4
+    assert {r["path"] for r in progress.recent} == {
+        "book/",
+        "notatki-kopia.md",
+        "#luzem-1.jpg",
+        "#luzem-2.jpg",
+    }
+
+    again = ImportProgress()
+    await import_directory(tmp_path, progress=again)
+    assert again.units_total == 0 and again.unchanged == 4 and again.fraction == 1
+
+
+async def test_interrupted_or_failed_documents_are_retried(tmp_path, fake_index, monkeypatch):
+    (tmp_path / "a.md").write_text("Ćwiczenia oddechowe dla dzieci.", "utf-8")
+    await import_directory(tmp_path)
+    async with session_factory() as session:
+        doc = (await session.exec(select(KbDocument))).one()
+        doc.status = "pending"  # import przerwany w trakcie embeddingu (restart kontenera)
+        session.add(doc)
+        await session.commit()
+
+    retried = await import_directory(tmp_path)
+    assert retried.updated == ["a.md"] and not retried.unchanged
+    async with session_factory() as session:
+        assert (await session.exec(select(KbDocument))).one().status == "indexed"
+    assert (await import_directory(tmp_path)).unchanged == ["a.md"]
