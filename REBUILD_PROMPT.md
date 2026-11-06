@@ -253,6 +253,14 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
   Kontenery `lg_postgres`, `lg_qdrant`, `lg_backend` (127.0.0.1:8092), `lg_frontend`. Zmiana `.env` wymaga
   odtworzenia kontenera (`docker compose … up -d backend`), samo `restart` nie wczyta nowych zmiennych.
 - Materiały na serwer: `rsync -avh --partial` z WSL (SSH port 2222) lub przez panel.
+- Host nginx (poza Dockerem) przyjmuje `logopeda-assist.webaby.io` i kieruje `/api/` → `127.0.0.1:8092` (bez buforowania,
+  SSE), `/` → `127.0.0.1:8081`; HTTPS z certbota. Healthcheck frontendu: `wget http://127.0.0.1/` (nie `localhost` –
+  w alpine to `::1`, a nginx nasłuchuje na IPv4).
+- **Migracja na nowy serwer:** katalogi `/opt/logoped-assist`, `/opt/logoped-kb` (właściciel UID 1000) i plik
+  `/opt/logoped-assist.env` (600) zakłada root; materiały – rsync serwer→serwer (agent SSH); dane – `pg_dump -Fc` →
+  `pg_restore --no-owner`; Qdrant odbudowuje się sam przy starcie z pustym indeksem (hasła wbudowane + `kb_documents`);
+  przy migracji rotuj `JWT_SECRET` i hasło bazy (`ALTER USER` w istniejącym klastrze); przełączenie: stop starego
+  backendu → końcowy zrzut i rsync → DNS (TTL 5 min) → nginx + certbot → sekrety `SSH_*` w GitHub Actions.
 
 ## 15. Testy i jakość
 
@@ -270,6 +278,7 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-06** – Przygotowanie migracji na nowy serwer (187.126.17.17); poprawka healthchecku frontendu (127.0.0.1).
 - **2026-11-06** – Logo aplikacji (okrągła plakietka) zamiast litery „L” w nawigacji i na stronie logowania.
 - **2026-11-06** – Gradienty wykresów wyrazistsze i trzybarwne (z brązem), rozpięte do najwyższej wartości.
 - **2026-11-06** – Gradientowe wykresy i kafelki w panelu administratora (nowa, zweryfikowana paleta; poprzedni
