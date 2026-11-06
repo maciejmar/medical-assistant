@@ -11,39 +11,75 @@ export const SURFACE = '#ffffff';
 const GRID = '#eef1f4';
 const AXIS_TEXT = '#64748b';
 
-/** Kolor rozjaśniony w stronę bieli (0–1) – jaśniejszy koniec gradientu tej samej barwy. */
-export function tint(hex: string, amount: number): string {
+/** Trzeci, ciepły kolor gradientów – brąz, do którego przechodzi koniec każdej serii. */
+export const ACCENT_BROWN = '#a0612f';
+
+function rgb(hex: string): [number, number, number] {
   const value = parseInt(hex.slice(1), 16);
-  const channel = (shift: number) => {
-    const c = (value >> shift) & 0xff;
-    return Math.round(c + (255 - c) * amount);
-  };
-  return `rgb(${channel(16)}, ${channel(8)}, ${channel(0)})`;
+  return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
 }
 
-type Direction = 'up' | 'right' | 'diagonal';
+/** Mieszanka dwóch kolorów: amount = udział koloru `to` (0–1). */
+export function mix(from: string, to: string, amount: number): string {
+  const a = rgb(from);
+  const b = rgb(to);
+  const c = a.map((v, i) => Math.round(v + (b[i] - v) * amount));
+  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+}
 
-function gradient(chart: Chart, area: ChartArea, color: string, direction: Direction): CanvasGradient {
-  const { ctx } = chart;
-  const g =
-    direction === 'up'
-      ? ctx.createLinearGradient(0, area.bottom, 0, area.top)
-      : direction === 'right'
-        ? ctx.createLinearGradient(area.left, 0, area.right, 0)
-        : ctx.createLinearGradient(area.left, area.top, area.right, area.bottom);
-  // Pełny kolor przy osi, rozjaśnienie ku końcowi obszaru wykresu – krótkie słupki zachowują
-  // nasycony kolor serii (gradient w odwrotną stronę robiłby z nich blade, „mniej ważne” plamy).
-  g.addColorStop(0, color);
-  g.addColorStop(1, tint(color, 0.4));
+/** Kolor rozjaśniony w stronę bieli (0–1). */
+export const tint = (hex: string, amount: number) => mix(hex, '#ffffff', amount);
+
+/** Kolor przyciemniony w stronę czerni (0–1). */
+export const shade = (hex: string, amount: number) => mix(hex, '#000000', amount);
+
+/** Trzy barwy: ciemniejszy odcień serii → kolor serii → brąz. Koniec to brąz zmieszany z kolorem
+ *  serii (nie czysty), żeby serie nie zlewały się ze sobą na końcach słupków. */
+function threeStops(g: CanvasGradient, color: string): CanvasGradient {
+  g.addColorStop(0, shade(color, 0.3));
+  g.addColorStop(0.45, color);
+  g.addColorStop(1, mix(color, ACCENT_BROWN, 0.85));
   return g;
 }
 
-/** Wypełnienie słupków serii: gradient od pełnego koloru przy osi do jaśniejszego końca. */
+/** Najwyższa wartość na wykresie (dla słupków skumulowanych – suma segmentów). */
+function peakValue(chart: Chart): number {
+  const datasets = chart.data.datasets;
+  const length = Math.max(0, ...datasets.map((d) => d.data.length));
+  let peak = 0;
+  for (let i = 0; i < length; i++) {
+    const values = datasets.map((d) => Number(d.data[i] ?? 0));
+    const stacked = datasets.length > 1;
+    peak = Math.max(peak, stacked ? values.reduce((a, b) => a + b, 0) : Math.max(...values));
+  }
+  return peak;
+}
+
+/** Wypełnienie słupków: gradient od osi do NAJWYŻSZEJ wartości na wykresie (nie do końca osi) –
+ *  najdłuższy słupek pokazuje pełne przejście do brązu, krótkie zachowują nasycony kolor serii. */
 export function barFill(color: string, direction: 'up' | 'right' = 'up') {
   return (ctx: ScriptableContext<'bar'>) => {
-    const area = ctx.chart.chartArea;
-    return area ? gradient(ctx.chart, area, color, direction) : color;
+    const { chart } = ctx;
+    const area = chart.chartArea;
+    const scale = chart.scales[direction === 'up' ? 'y' : 'x'];
+    if (!area || !scale) {
+      return color;
+    }
+    const start = scale.getPixelForValue(0);
+    const end = scale.getPixelForValue(peakValue(chart) || 1);
+    const g =
+      direction === 'up'
+        ? chart.ctx.createLinearGradient(0, start, 0, Math.min(end, start - 1))
+        : chart.ctx.createLinearGradient(start, 0, Math.max(end, start + 1), 0);
+    return threeStops(g, color);
   };
+}
+
+function diagonal(chart: Chart, area: ChartArea, color: string): CanvasGradient {
+  return threeStops(
+    chart.ctx.createLinearGradient(area.left, area.top, area.right, area.bottom),
+    color,
+  );
 }
 
 /** Wypełnienie wycinka pierścienia: gradient w kolorze danego wycinka. */
@@ -51,7 +87,7 @@ export function arcFill(colors: readonly string[]) {
   return (ctx: ScriptableContext<'doughnut'>) => {
     const color = colors[ctx.dataIndex] ?? colors[colors.length - 1];
     const area = ctx.chart.chartArea;
-    return area ? gradient(ctx.chart, area, color, 'diagonal') : color;
+    return area ? diagonal(ctx.chart, area, color) : color;
   };
 }
 

@@ -144,8 +144,9 @@ Konto niepowiązane z kartą → komunikat 404.
   per użytkownik, per operacja; zakres 7/30/90/365 dni), kafelki (tokeny, zapytania, konta, **fragmenty** w bazie wiedzy)
   z gradientowym tłem i paskiem akcentu. Styl wykresów w `admin-panel/chart-style.ts`: paleta kategorialna
   w stałej kolejności `#0d9488, #4f7cff, #f59e0b, #e4572e, #8b5cf6, #db2777` (zweryfikowana walidatorem palet –
-  jasność, nasycenie, rozróżnialność przy daltonizmie; powyżej 6 modeli reszta w „Inne”), gradient w obrębie koloru
-  serii (pełny kolor przy osi → rozjaśnienie ku końcowi), słupki ≤ 24 px z zaokrąglonym końcem, 2 px odstępu
+  jasność, nasycenie, rozróżnialność przy daltonizmie; powyżej 6 modeli reszta w „Inne”), gradient trzybarwny
+  (ciemniejszy odcień serii przy osi → kolor serii → brąz `#a0612f` zmieszany w 85% z kolorem serii), rozpięty
+  od osi do najwyższej wartości na wykresie (nie do końca osi), słupki ≤ 24 px z zaokrąglonym końcem, 2 px odstępu
   w kolorze tła między segmentami, stonowana siatka 1 px, skrócone liczby na osi (tys./mln), tooltipy pl-PL, zarządzanie kontami:
   tworzenie (`POST /api/admin/users` z rolą), zmiana roli z listy (opcje z `[selected]`, nie `[value]` na select –
   inaczej przeglądarka pokazuje zawsze pierwszą opcję), nowe hasło, blokowanie, usuwanie; własnego konta nie można zmienić.
@@ -267,6 +268,7 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-06** – Gradienty wykresów wyrazistsze i trzybarwne (z brązem), rozpięte do najwyższej wartości.
 - **2026-11-06** – Gradientowe wykresy i kafelki w panelu administratora (nowa, zweryfikowana paleta; poprzedni
   turkus był za mało nasycony, a 7. kolor był szary); kafelek pokazuje „Fragmenty w bazie wiedzy” (to liczba fragmentów
   w Qdrant, nie dokumentów).
