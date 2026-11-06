@@ -7,9 +7,19 @@ import { ChartConfiguration, ChartData } from 'chart.js';
 import { BaseChartDirective } from 'ng2-charts';
 import { AdminService } from '../../core/admin.service';
 import { AuthService } from '../../core/auth.service';
+import {
+  LEGEND,
+  SERIES,
+  SURFACE,
+  TOOLTIP,
+  arcFill,
+  barFill,
+  categoryAxis,
+  formatFull,
+  valueAxis,
+} from './chart-style';
 import { ROLE_LABELS, Role, SystemStats, UsageReport, User } from '../../shared/models';
 
-const PALETTE = ['#237d75', '#4f7cff', '#f59e0b', '#e4572e', '#8b5cf6', '#14b8a6', '#64748b'];
 
 @Component({
   selector: 'app-admin-panel',
@@ -40,20 +50,24 @@ const PALETTE = ['#237d75', '#4f7cff', '#f59e0b', '#e4572e', '#8b5cf6', '#14b8a6
     }
 
     <div class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <div class="card !p-4">
+      <div class="relative overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white via-white to-brand-50 p-4 shadow-sm">
+        <span class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-teal-400 to-sky-500" aria-hidden="true"></span>
         <p class="label">Tokeny łącznie</p>
         <p class="text-2xl font-bold">{{ usage()?.totals?.total_tokens ?? 0 | number }}</p>
       </div>
-      <div class="card !p-4">
+      <div class="relative overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white via-white to-brand-50 p-4 shadow-sm">
+        <span class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-teal-400 to-sky-500" aria-hidden="true"></span>
         <p class="label">Zapytania do modeli</p>
         <p class="text-2xl font-bold">{{ usage()?.totals?.requests ?? 0 | number }}</p>
       </div>
-      <div class="card !p-4">
+      <div class="relative overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white via-white to-brand-50 p-4 shadow-sm">
+        <span class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-teal-400 to-sky-500" aria-hidden="true"></span>
         <p class="label">Konta (aktywne / wszystkie)</p>
         <p class="text-2xl font-bold">{{ stats()?.users_active ?? 0 }} / {{ stats()?.users_total ?? 0 }}</p>
       </div>
-      <div class="card !p-4">
-        <p class="label">Dokumenty w bazie wiedzy</p>
+      <div class="relative overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white via-white to-brand-50 p-4 shadow-sm">
+        <span class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-teal-400 to-sky-500" aria-hidden="true"></span>
+        <p class="label">Fragmenty w bazie wiedzy</p>
         <p class="text-2xl font-bold">{{ stats()?.knowledge_base_documents ?? '—' }}</p>
       </div>
     </div>
@@ -210,8 +224,26 @@ export class AdminPanelComponent {
     return {
       labels: rows.map((r) => r.date),
       datasets: [
-        { label: 'Prompt', data: rows.map((r) => r.prompt_tokens), backgroundColor: PALETTE[0] },
-        { label: 'Completion', data: rows.map((r) => r.completion_tokens), backgroundColor: PALETTE[1] },
+        {
+          label: 'Prompt',
+          data: rows.map((r) => r.prompt_tokens),
+          backgroundColor: barFill(SERIES[0]),
+          hoverBackgroundColor: SERIES[0],
+          maxBarThickness: 24,
+          borderRadius: 0,
+        },
+        {
+          // Górny segment: zaokrąglony koniec i 2 px odstępu w kolorze tła od dolnego.
+          label: 'Completion',
+          data: rows.map((r) => r.completion_tokens),
+          backgroundColor: barFill(SERIES[1]),
+          hoverBackgroundColor: SERIES[1],
+          maxBarThickness: 24,
+          borderRadius: { topLeft: 4, topRight: 4 },
+          borderSkipped: false,
+          borderColor: SURFACE,
+          borderWidth: { bottom: 2 },
+        },
       ],
     };
   });
@@ -220,18 +252,41 @@ export class AdminPanelComponent {
     const rows = this.usage()?.by_user ?? [];
     return {
       labels: rows.map((r) => r.label),
-      datasets: [{ label: 'Tokeny', data: rows.map((r) => r.total_tokens), backgroundColor: PALETTE[0] }],
+      datasets: [
+        {
+          label: 'Tokeny',
+          data: rows.map((r) => r.total_tokens),
+          backgroundColor: barFill(SERIES[0], 'right'),
+          hoverBackgroundColor: SERIES[0],
+          maxBarThickness: 24,
+          borderRadius: { topRight: 4, bottomRight: 4 },
+          borderSkipped: 'left',
+        },
+      ],
     };
   });
 
+  /** Modele: kolory w stałej kolejności; powyżej liczby barw palety reszta trafia do „Inne”. */
   protected readonly modelChart = computed<ChartData<'doughnut'>>(() => {
-    const rows = this.usage()?.by_model ?? [];
+    const rows = [...(this.usage()?.by_model ?? [])];
+    const limit = SERIES.length - 1;
+    const shown = rows.length > SERIES.length ? rows.slice(0, limit) : rows;
+    const labels = shown.map((r) => r.model_name);
+    const data = shown.map((r) => r.total_tokens);
+    if (rows.length > SERIES.length) {
+      labels.push('Inne');
+      data.push(rows.slice(limit).reduce((sum, r) => sum + r.total_tokens, 0));
+    }
     return {
-      labels: rows.map((r) => r.model_name),
+      labels,
       datasets: [
         {
-          data: rows.map((r) => r.total_tokens),
-          backgroundColor: rows.map((_, i) => PALETTE[i % PALETTE.length]),
+          data,
+          backgroundColor: arcFill(SERIES),
+          hoverBackgroundColor: [...SERIES],
+          borderColor: SURFACE,
+          borderWidth: 2,
+          hoverOffset: 6,
         },
       ],
     };
@@ -240,21 +295,36 @@ export class AdminPanelComponent {
   protected readonly stackedOptions: ChartConfiguration<'bar'>['options'] = {
     responsive: true,
     maintainAspectRatio: false,
-    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: LEGEND,
+      tooltip: {
+        ...TOOLTIP,
+        callbacks: { label: (c) => ` ${c.dataset.label}: ${formatFull(c.parsed.y)} tokenów` },
+      },
+    },
+    scales: { x: categoryAxis(true), y: valueAxis(true) },
   };
 
   protected readonly horizontalOptions: ChartConfiguration<'bar'>['options'] = {
     indexAxis: 'y',
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: { x: { beginAtZero: true } },
+    plugins: {
+      legend: { display: false },
+      tooltip: { ...TOOLTIP, callbacks: { label: (c) => ` ${formatFull(c.parsed.x)} tokenów` } },
+    },
+    scales: { x: valueAxis(), y: categoryAxis() },
   };
 
   protected readonly doughnutOptions: ChartConfiguration<'doughnut'>['options'] = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { position: 'bottom' } },
+    cutout: '68%',
+    plugins: {
+      legend: LEGEND,
+      tooltip: { ...TOOLTIP, callbacks: { label: (c) => ` ${c.label}: ${formatFull(c.parsed)} tokenów` } },
+    },
   };
 
   constructor() {
