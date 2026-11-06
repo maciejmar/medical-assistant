@@ -224,8 +224,8 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
 `adminGuard`, `patientGuard`, `guestGuard`; interceptor JWT z wylogowaniem przy 401),
 `features/` (auth, dashboard, patient-info + patient-care, chat, admin-panel + llm-logs + knowledge-base +
 import-progress, patient-portal), `shared/` (modele, navbar, utils). Trasy ładowane leniwie; `homeRoute()`:
-admin → `/admin`, pacjent → `/patient`, lekarz → `/dashboard`. Logo: `assets/images/logopedic-logo-256.png` (zmniejszona, docięta do koła kopia `logopedic-logo.png`, białe tło),
-wyświetlane jako okrągła plakietka (`rounded-full bg-white`) – 80 px w pasku nawigacji, 128 px na stronie logowania.
+admin → `/admin`, pacjent → `/patient`, lekarz → `/dashboard`. Logo: `assets/images/logopedic-logo-384.png` (zmniejszona, docięta do koła kopia `logopedic-logo.png`, białe tło),
+wyświetlane jako okrągła plakietka (`rounded-full bg-white`) – 120 px w pasku nawigacji, 192 px na stronie logowania.
 Kolory marki: `brand-50…900` (teal, `#237d75`
 jako 600); tło `body` – gradient `#c8e4dd → #1f052e`; karty dashboardu/asystenta półprzezroczyste z gradientem.
 

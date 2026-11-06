@@ -12,7 +12,7 @@ import { AuthService } from '../../core/auth.service';
   template: `
     <div class="mx-auto mt-10 w-full max-w-md">
       <div class="mb-6 text-center">
-        <img src="assets/images/logopedic-logo-256.png" alt="" width="128" height="128" class="mx-auto mb-3 h-32 w-32 rounded-full bg-white object-cover shadow-md ring-2 ring-white" />
+        <img src="assets/images/logopedic-logo-384.png" alt="" width="192" height="192" class="mx-auto mb-3 h-48 w-48 rounded-full bg-white object-cover shadow-md ring-2 ring-white" />
         <h1 class="text-2xl font-bold">Logoped Assistant</h1>
         <p class="text-sm text-slate-500">Asystent dla lekarzy logopedów</p>
       </div>

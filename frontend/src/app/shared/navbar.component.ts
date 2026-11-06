@@ -11,7 +11,7 @@ import { AuthService } from '../core/auth.service';
     <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
         <a [routerLink]="auth.homeRoute()" class="flex items-center gap-2 font-bold text-brand-700">
-          <img src="assets/images/logopedic-logo-256.png" alt="" width="80" height="80" class="h-20 w-20 rounded-full bg-white object-cover ring-1 ring-slate-200" />
+          <img src="assets/images/logopedic-logo-384.png" alt="" width="120" height="120" class="h-[120px] w-[120px] rounded-full bg-white object-cover ring-1 ring-slate-200" />
           <span>Logoped Assistant</span>
         </a>
 
