@@ -224,7 +224,9 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
 `adminGuard`, `patientGuard`, `guestGuard`; interceptor JWT z wylogowaniem przy 401),
 `features/` (auth, dashboard, patient-info + patient-care, chat, admin-panel + llm-logs + knowledge-base +
 import-progress, patient-portal), `shared/` (modele, navbar, utils). Trasy ładowane leniwie; `homeRoute()`:
-admin → `/admin`, pacjent → `/patient`, lekarz → `/dashboard`. Kolory marki: `brand-50…900` (teal, `#237d75`
+admin → `/admin`, pacjent → `/patient`, lekarz → `/dashboard`. Logo: `assets/images/logopedic-logo-192.png` (zmniejszona, docięta do koła kopia `logopedic-logo.png`, białe tło),
+wyświetlane jako okrągła plakietka (`rounded-full bg-white`) – 40 px w pasku nawigacji, 64 px na stronie logowania.
+Kolory marki: `brand-50…900` (teal, `#237d75`
 jako 600); tło `body` – gradient `#c8e4dd → #1f052e`; karty dashboardu/asystenta półprzezroczyste z gradientem.
 
 ## 13. Konfiguracja (zmienne środowiskowe)
@@ -268,6 +270,7 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-06** – Logo aplikacji (okrągła plakietka) zamiast litery „L” w nawigacji i na stronie logowania.
 - **2026-11-06** – Gradienty wykresów wyrazistsze i trzybarwne (z brązem), rozpięte do najwyższej wartości.
 - **2026-11-06** – Gradientowe wykresy i kafelki w panelu administratora (nowa, zweryfikowana paleta; poprzedni
   turkus był za mało nasycony, a 7. kolor był szary); kafelek pokazuje „Fragmenty w bazie wiedzy” (to liczba fragmentów

@@ -128,7 +128,7 @@ import { ageFromBirthDate, emptyToNull } from '../../shared/utils';
     </div>
 
     <footer class="fixed inset-x-0 bottom-0 z-10 flex h-12 items-center justify-between gap-3 bg-[#02121c] px-4 text-xs text-slate-300">
-      <p class="truncate">© 2026 Webaby<span class="hidden sm:inline"> — oprogramowanie Logoped Assist.</span></p>
+      <p class="truncate">© 2026 Webaby<span class="hidden sm:inline"> — oprogramowanie Logoped Assistant.</span></p>
       <div class="flex shrink-0 items-center gap-4">
         <a href="#" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" class="text-slate-300 transition hover:text-white">
           <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
