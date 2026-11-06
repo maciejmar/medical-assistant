@@ -30,8 +30,14 @@ from PIL import Image
 from sqlmodel import col, select
 
 from .config import settings
-from .database import KbDocument, OcrPage, init_db, session_factory
-from .knowledge import TEXT_EXTENSIONS, ExtractionError, extract_text, index_and_record
+from .database import KbDocument, OcrPage, User, init_db, session_factory
+from .knowledge import (
+    TEXT_EXTENSIONS,
+    ExtractionError,
+    extract_text,
+    index_and_record,
+    set_document_owner,
+)
 from .ocr import IMAGE_EXTENSIONS, ocr_image
 
 logger = logging.getLogger(__name__)
@@ -54,6 +60,7 @@ class ImportUnit:
     kind: str  # "file" | "images"
     files: list[SourceFile]
     title_hint: str
+    owner_id: int | None = None  # materiał prywatny (katalog prywatne/<id>/), None = wspólny
 
     @property
     def content_hash(self) -> str:
@@ -151,6 +158,15 @@ def directory_fingerprint(root: Path) -> str:
 
 _SAFE_PART = re.compile(r"[\w .,+()&'\-]+")
 _MAX_DEPTH = 4
+PRIVATE_DIR = "prywatne"
+
+
+def owner_from_path(relative: str) -> int | None:
+    """Właściciel materiału prywatnego z ścieżki „prywatne/<id konta>/…”; None = wiedza wspólna."""
+    parts = relative.split("/")
+    if len(parts) >= 3 and parts[0] == PRIVATE_DIR and parts[1].isdigit():
+        return int(parts[1])
+    return None
 
 
 class UnsafePathError(ValueError):
@@ -175,10 +191,19 @@ def safe_target(root: Path, relative_path: str) -> Path:
     return target
 
 
-def store_file(root: Path, relative_path: str, data: bytes) -> tuple[str, bool]:
+def store_file(
+    root: Path, relative_path: str, data: bytes, owner_id: int | None = None
+) -> tuple[str, bool]:
     """Zapisuje plik w katalogu bazy wiedzy; zwraca (ścieżka względna, czy zmieniono treść).
-    Zapis przez plik tymczasowy (ukryty – pomijany przez import) i atomową zmianę nazwy."""
-    target = safe_target(root, relative_path)
+    Materiał prywatny trafia do prywatne/<owner_id>/…. Zapis przez plik tymczasowy (ukryty –
+    pomijany przez import) i atomową zmianę nazwy."""
+    safe_target(root, relative_path)  # walidacja ścieżki podanej przez użytkownika
+    top = relative_path.replace("\\", "/").split("/")[0].strip()
+    if owner_id is None and top == PRIVATE_DIR:
+        raise UnsafePathError(f"Folder „{PRIVATE_DIR}” jest zarezerwowany dla wiedzy prywatnej")
+    if owner_id is not None:
+        relative_path = f"{PRIVATE_DIR}/{owner_id}/{relative_path}"
+    target = root.joinpath(*[part.strip() for part in relative_path.replace("\\", "/").split("/")])
     if target.is_file() and _sha256(target) == hashlib.sha256(data).hexdigest():
         return target.relative_to(root).as_posix(), False
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -195,25 +220,28 @@ def plan_units(root: Path, report: ImportReport) -> list[ImportUnit]:
     """Dzieli zawartość katalogu na dokumenty, przetwarzając identyczne pliki raz:
     - plik tekstowy obecny w kilku miejscach – liczy się kopia położona najpłycej (stabilnie
       przy dorzucaniu folderów zawierających kopie już zaimportowanych dokumentów),
-    - zdjęcie obecne w kilku miejscach – liczy się kopia z podkatalogu (podkatalog = dokument)."""
+    - zdjęcie obecne w kilku miejscach – liczy się kopia z podkatalogu (podkatalog = dokument).
+    Duplikaty wykrywane są w obrębie zakresu widoczności (wspólne / prywatne danego konta)."""
     files = source_files(root)
-    seen: set[str] = set()
+    seen: set[tuple[int | None, str]] = set()
     units: list[ImportUnit] = []
 
     texts = [p for p in files if p.suffix.lower() in TEXT_EXTENSIONS]
     for path in sorted(texts, key=lambda p: (len(p.relative_to(root).parts), str(p))):
         sha = _cached_sha256(path)
-        if sha in seen:
+        relative = path.relative_to(root).as_posix()
+        owner = owner_from_path(relative)
+        if (owner, sha) in seen:
             report.duplicates += 1
             continue
-        seen.add(sha)
-        relative = path.relative_to(root).as_posix()
+        seen.add((owner, sha))
         units.append(
             ImportUnit(
                 relative,
                 "file",
                 [SourceFile(path, relative, sha, datetime.min)],
                 _pretty(path.name),
+                owner,
             )
         )
 
@@ -223,20 +251,23 @@ def plan_units(root: Path, report: ImportReport) -> list[ImportUnit]:
             images_by_dir.setdefault(path.parent, []).append(path)
     for directory in sorted(images_by_dir, key=lambda d: (-len(d.relative_to(root).parts), str(d))):
         images: list[SourceFile] = []
+        rel_dir = directory.relative_to(root).as_posix()
+        owner = owner_from_path(f"{rel_dir}/x")
         for path in images_by_dir[directory]:
             sha = _cached_sha256(path)
-            if sha in seen:
+            if (owner, sha) in seen:
                 report.duplicates += 1
                 continue
-            seen.add(sha)
+            seen.add((owner, sha))
             relative = path.relative_to(root).as_posix()
             images.append(SourceFile(path, relative, sha, _taken_at(path)))
         if not images:
             continue
-        rel_dir = directory.relative_to(root).as_posix()
         if directory != root:
             ordered = sorted(images, key=lambda f: (f.taken_at, f.relative))
-            units.append(ImportUnit(f"{rel_dir}/", "images", ordered, _pretty(directory.name)))
+            units.append(
+                ImportUnit(f"{rel_dir}/", "images", ordered, _pretty(directory.name), owner)
+            )
         else:
             gap = timedelta(minutes=settings.kb_session_gap_minutes)
             for session in split_sessions(images, gap):
@@ -362,6 +393,11 @@ class ImportProgress:
         return int(self.elapsed_seconds * (1 - self.fraction) / self.fraction)
 
 
+async def _user_ids() -> set[int]:
+    async with session_factory() as session:
+        return set((await session.exec(select(User.id))).all())  # type: ignore[arg-type]
+
+
 async def unit_text(
     unit: ImportUnit, on_page: Callable[[int, int], None] | None = None
 ) -> tuple[str, str]:
@@ -410,8 +446,12 @@ async def import_directory(
                 )
             ).all()
         }
+    known_users = await _user_ids()
     pending = []
     for unit in units:
+        if unit.owner_id is not None and unit.owner_id not in known_users:
+            report.failed.append(f"{unit.source_path}: konto #{unit.owner_id} nie istnieje")
+            continue
         existing = known.get(unit.source_path)
         # Pomijamy tylko dokumenty zaindeksowane w całości – przerwany import (np. restart przy
         # wdrożeniu) albo błąd indeksowania są ponawiane; OCR stron i tak jest w pamięci podręcznej.
@@ -451,6 +491,7 @@ async def import_directory(
             audience=DEFAULT_AUDIENCE,
             source_path=unit.source_path,
             text=text,
+            uploaded_by=unit.owner_id,
         )
         doc.text = text
         doc.content_hash = unit.content_hash
@@ -459,6 +500,10 @@ async def import_directory(
             doc = await session.merge(doc)
             await session.commit()
             await session.refresh(doc)
+        if existing is None:
+            # Widoczność ustalana przy utworzeniu (z katalogu prywatne/<id>/); później można ją
+            # zmienić w panelu – kolejne importy jej nie nadpisują.
+            await set_document_owner(doc.id, unit.owner_id)  # type: ignore[arg-type]
         doc = await index_and_record(doc, progress.on_chunks)
         if doc.status != "indexed":
             report.failed.append(f"{unit.source_path}: {doc.error}")

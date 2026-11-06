@@ -154,7 +154,8 @@ async def test_category_filter_does_not_exclude_other_documents(monkeypatch):
     async def fake_embed(texts, *, user_id, operation):
         return [[0.1]], Usage()
 
-    async def fake_search(query, dense, *, filters=None, limit=None):
+    async def fake_search(query, dense, *, filters=None, user_id=None, limit=None):
+        assert user_id == 1, "wyszukiwanie musi znać pytającego (wiedza prywatna)"
         calls.append(filters)
         return [disorder] if filters else [technique, disorder]
 
@@ -171,3 +172,21 @@ async def test_category_filter_does_not_exclude_other_documents(monkeypatch):
     result = await nodes.retrieve(state)
     assert [d["id"] for d in result["candidates"]] == ["b", "a"]
     assert calls == [None, {"category": "disorder"}]
+
+
+def test_search_filter_limits_to_shared_and_own_private():
+    from qdrant_client import models
+
+    from src.vector_store import search_filter
+
+    plain = search_filter(None, user_id=7)
+    visible = plain.must[0]
+    assert isinstance(visible, models.Filter) and len(visible.should) == 2
+    assert isinstance(visible.should[0], models.IsEmptyCondition)
+    assert visible.should[1].key == "owner_id" and visible.should[1].match.value == 7
+
+    anonymous = search_filter(None, user_id=None).must[0]
+    assert len(anonymous.should) == 1, "bez użytkownika – tylko wiedza wspólna"
+
+    scoped = search_filter({"category": "technique"}, user_id=7)
+    assert scoped.must[0].key == "category" and isinstance(scoped.must[1], models.Filter)

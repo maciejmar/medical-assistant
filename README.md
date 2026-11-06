@@ -4,6 +4,8 @@ Asystent RAG dla lekarzy logopedów: czat ze źródłami (LangGraph + Qdrant + r
 karty pacjentów izolowane per lekarz, panel pacjenta z zaleceniami i powiadomieniami e-mail oraz panel
 administratora (statystyki zużycia, zarządzanie kontami, log zapytań LLM).
 
+Pełny opis projektu w formie promptu do odtworzenia go od zera (z historią zmian): [REBUILD_PROMPT.md](REBUILD_PROMPT.md).
+
 ## Uruchomienie
 
 ```bash
@@ -34,6 +36,13 @@ docker compose up --build
 - **katalog z materiałami** – na serwerze `/opt/logoped-kb` (lokalnie domyślnie `../laryngolog`), montowany
   w kontenerze backendu jako `/kb` (tylko do odczytu); ścieżkę hosta zmienia `KB_SOURCE_HOST_DIR`,
 - **pojedyncze pliki** wgrane w panelu *Baza wiedzy* (`/admin/knowledge`).
+
+### Wiedza wspólna i prywatna
+
+Przy dodawaniu pliku lub folderu (i później w „Edytuj”) wybierasz widoczność: **wspólna** – dla wszystkich
+użytkowników aplikacji, **prywatna** – tylko dla konta, które ją dodało (inni administratorzy jej nie widzą, a asystent
+korzysta z niej wyłącznie w rozmowach tego konta). Pliki prywatne leżą na serwerze w `/opt/logoped-kb/prywatne/<id konta>/`
+– tak samo można je dorzucać przez rsync.
 
 ### Gdy dochodzą nowe materiały
 

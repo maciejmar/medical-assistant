@@ -269,6 +269,7 @@ class KbDocumentOut(BaseModel):
     indexed_at: datetime | None
     source_path: str | None
     pages: int
+    visibility: Literal["shared", "private"]
     characters: int
     preview: str
 
@@ -280,6 +281,7 @@ class KbDocumentPatch(BaseModel):
     icd10: str = Field(default="", max_length=50)
     icd11: str = Field(default="", max_length=50)
     tags: str = Field(default="", max_length=500)
+    visibility: Literal["shared", "private"] | None = None
 
 
 class KbImportRecentOut(BaseModel):

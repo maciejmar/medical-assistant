@@ -15,6 +15,8 @@ from sqlmodel import col, delete, select
 from ..auth import CurrentAdmin, SessionDep, hash_password
 from ..database import (
     ChatMessage,
+    KbDocument,
+    KbPrivateDocument,
     LlmCall,
     Patient,
     PatientAccount,
@@ -213,6 +215,22 @@ async def delete_user(user_id: int, session: SessionDep, admin: CurrentAdmin) ->
         update(TokenUsage).where(col(TokenUsage.user_id) == user.id).values(user_id=None)
     )
     await session.exec(update(LlmCall).where(col(LlmCall.user_id) == user.id).values(user_id=None))
+    # Prywatna wiedza konta znika razem z nim; wspólna zostaje (bez wskazania autora).
+    private_ids = (
+        await session.exec(
+            select(KbPrivateDocument.document_id).where(KbPrivateDocument.owner_id == user.id)
+        )
+    ).all()
+    for document_id in private_ids:
+        await vector_store.delete_kb_document(document_id)
+    if private_ids:
+        await session.exec(
+            delete(KbPrivateDocument).where(col(KbPrivateDocument.owner_id) == user.id)
+        )
+        await session.exec(delete(KbDocument).where(col(KbDocument.id).in_(private_ids)))
+    await session.exec(
+        update(KbDocument).where(col(KbDocument.uploaded_by) == user.id).values(uploaded_by=None)
+    )
     await session.delete(user)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -5,7 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AdminService } from '../../core/admin.service';
-import { KbAudience, KbCategory, KbDocument, KbImportStatus } from '../../shared/models';
+import { KbAudience, KbCategory, KbDocument, KbImportStatus, KbVisibility } from '../../shared/models';
 import { ImportProgressComponent, UploadState } from './import-progress.component';
 
 const ACCEPT = '.pdf,.docx,.odt,.md,.txt,.jpg,.jpeg,.png';
@@ -16,6 +16,11 @@ export const CATEGORY_LABELS: Record<KbCategory, string> = {
   disorder: 'Jednostki chorobowe',
   diagnostics: 'Diagnostyka',
   icd: 'Klasyfikacja ICD',
+};
+
+export const VISIBILITY_LABELS: Record<KbVisibility, { title: string; hint: string }> = {
+  shared: { title: 'Wspólna', hint: 'dla wszystkich użytkowników aplikacji' },
+  private: { title: 'Prywatna', hint: 'tylko dla mojego konta – w panelu i w moich rozmowach z asystentem' },
 };
 
 export const AUDIENCE_LABELS: Record<KbAudience, string> = {
@@ -86,6 +91,20 @@ function apiError(err: unknown, fallback: string): string {
             {{ folderUploading() ? 'Wysyłanie…' : 'Wyślij na serwer i zaindeksuj' }}
           </button>
         </div>
+        <fieldset class="mt-3" [disabled]="folderUploading()">
+          <legend class="label">Widoczność wiedzy z tego folderu</legend>
+          <div class="grid gap-2 sm:grid-cols-2">
+            @for (v of visibilities; track v) {
+              <label class="flex cursor-pointer items-start gap-2 rounded-lg border p-2 text-sm" [class]="folderVisibility() === v ? 'border-brand-500 bg-brand-50' : 'border-slate-200'">
+                <input type="radio" name="folder-visibility" class="mt-1" [value]="v" [checked]="folderVisibility() === v" (change)="folderVisibility.set(v)" />
+                <span>
+                  <span class="font-semibold">{{ visibilityLabels[v].title }}</span>
+                  <span class="block text-xs text-slate-500">{{ visibilityLabels[v].hint }}</span>
+                </span>
+              </label>
+            }
+          </div>
+        </fieldset>
         @if (folderFiles().length) {
           <p class="mt-2 text-xs text-slate-500">
             {{ folderFiles().length }} plików ({{ folderMegabytes() | number: '1.0-1' }} MB)
@@ -137,6 +156,20 @@ function apiError(err: unknown, fallback: string): string {
         <label class="label" for="kb-tags">Słowa kluczowe (pomagają w wyszukiwaniu)</label>
         <input id="kb-tags" class="field" formControlName="tags" placeholder="np. miofunkcjonalna, połykanie, ssanie" maxlength="500" />
       </div>
+      <fieldset class="sm:col-span-2 lg:col-span-3">
+        <legend class="label">Widoczność</legend>
+        <div class="grid gap-2 sm:grid-cols-2">
+          @for (v of visibilities; track v) {
+            <label class="flex cursor-pointer items-start gap-2 rounded-lg border p-2 text-sm" [class]="form.controls.visibility.value === v ? 'border-brand-500 bg-brand-50' : 'border-slate-200'">
+              <input type="radio" class="mt-1" formControlName="visibility" [value]="v" />
+              <span>
+                <span class="font-semibold">{{ visibilityLabels[v].title }}</span>
+                <span class="block text-xs text-slate-500">{{ visibilityLabels[v].hint }}</span>
+              </span>
+            </label>
+          }
+        </div>
+      </fieldset>
       <div class="flex items-end">
         <button type="submit" class="btn-primary w-full" [disabled]="!file() || form.invalid || uploading()">
           {{ uploading() ? 'Indeksowanie…' : 'Wgraj i zaindeksuj' }}
@@ -164,7 +197,13 @@ function apiError(err: unknown, fallback: string): string {
           <li class="rounded-lg border border-slate-200 p-3">
             <div class="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p class="font-semibold">{{ d.title }}</p>
+                <p class="font-semibold">
+                  {{ d.title }}
+                  <span class="badge ml-1 align-middle" [class]="d.visibility === 'private' ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-700'"
+                        [title]="visibilityLabels[d.visibility].hint">
+                    {{ d.visibility === 'private' ? '🔒 prywatna' : 'wspólna' }}
+                  </span>
+                </p>
                 <p class="text-xs text-slate-500">
                   {{ d.source_path ?? d.filename }}
                   @if (d.pages) { ({{ d.pages }} zdjęć) }
@@ -213,7 +252,13 @@ function apiError(err: unknown, fallback: string): string {
                   <label class="label" [for]="'e-tags-' + d.id">Słowa kluczowe</label>
                   <input [id]="'e-tags-' + d.id" class="field" formControlName="tags" maxlength="500" />
                 </div>
-                <div class="flex items-end gap-2">
+                <div>
+                  <label class="label" [for]="'e-vis-' + d.id">Widoczność</label>
+                  <select [id]="'e-vis-' + d.id" class="field" formControlName="visibility">
+                    @for (v of visibilities; track v) { <option [value]="v">{{ visibilityLabels[v].title }}</option> }
+                  </select>
+                </div>
+                <div class="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
                   <button type="button" class="btn-secondary" (click)="editingId.set(null)">Anuluj</button>
                   <button type="submit" class="btn-primary" [disabled]="editForm.invalid || busyId() === d.id">Zapisz</button>
                 </div>
@@ -237,6 +282,9 @@ export class KnowledgeBaseComponent {
   protected readonly audiences = Object.keys(AUDIENCE_LABELS) as KbAudience[];
   protected readonly categoryLabels = CATEGORY_LABELS;
   protected readonly audienceLabels = AUDIENCE_LABELS;
+  protected readonly visibilities: KbVisibility[] = ['shared', 'private'];
+  protected readonly visibilityLabels = VISIBILITY_LABELS;
+  protected readonly folderVisibility = signal<KbVisibility>('shared');
 
   protected readonly documents = signal<KbDocument[]>([]);
   protected readonly builtin = signal(0);
@@ -272,6 +320,7 @@ export class KnowledgeBaseComponent {
     icd10: [''],
     icd11: [''],
     tags: [''],
+    visibility: ['shared' as KbVisibility, Validators.required],
   });
 
   protected readonly editForm = inject(FormBuilder).nonNullable.group({
@@ -281,6 +330,7 @@ export class KnowledgeBaseComponent {
     icd10: [''],
     icd11: [''],
     tags: [''],
+    visibility: ['shared' as KbVisibility, Validators.required],
   });
 
   constructor() {
@@ -309,7 +359,7 @@ export class KnowledgeBaseComponent {
     for (const file of files) {
       const relativePath = file.webkitRelativePath || file.name;
       try {
-        await firstValueFrom(this.api.storeKnowledgeFile(file, relativePath));
+        await firstValueFrom(this.api.storeKnowledgeFile(file, relativePath, this.folderVisibility()));
       } catch (err: unknown) {
         this.folderErrors.update((list) => [...list, `${relativePath}: ${apiError(err, 'błąd wysyłania')}`]);
       }
@@ -370,6 +420,7 @@ export class KnowledgeBaseComponent {
       icd10: doc.icd10,
       icd11: doc.icd11,
       tags: doc.tags,
+      visibility: doc.visibility,
     });
   }
 
@@ -420,7 +471,15 @@ export class KnowledgeBaseComponent {
             ? `Zaindeksowano „${doc.title}” (${doc.chunks} fragm.).`
             : `Plik zapisano, ale indeksowanie nie powiodło się – użyj „Indeksuj ponownie”.`,
         );
-        this.form.reset({ title: '', category: v.category, audience: v.audience, icd10: '', icd11: '', tags: '' });
+        this.form.reset({
+          title: '',
+          category: v.category,
+          audience: v.audience,
+          icd10: '',
+          icd11: '',
+          tags: '',
+          visibility: v.visibility,
+        });
         this.file.set(null);
         fileInput.value = '';
       },

@@ -51,6 +51,30 @@ def build_filter(filters: dict[str, str] | None) -> models.Filter | None:
     return models.Filter(must=must) if must else None
 
 
+OWNER_FIELD = "owner_id"
+
+
+def visibility_filter(user_id: int | None) -> models.Filter:
+    """Fragmenty wspólne (bez właściciela – w tym hasła wbudowane) oraz prywatne pytającego."""
+    allowed: list[models.Condition] = [
+        models.IsEmptyCondition(is_empty=models.PayloadField(key=OWNER_FIELD))
+    ]
+    if user_id is not None:
+        allowed.append(
+            models.FieldCondition(key=OWNER_FIELD, match=models.MatchValue(value=user_id))
+        )
+    return models.Filter(should=allowed)
+
+
+def search_filter(filters: dict[str, str] | None, user_id: int | None) -> models.Filter:
+    """Filtr kategorii/grupy (opcjonalny) zawsze zawężony do treści widocznych dla użytkownika."""
+    visible = visibility_filter(user_id)
+    scoped = build_filter(filters)
+    if scoped is None:
+        return models.Filter(must=[visible])
+    return models.Filter(must=[*(scoped.must or []), visible])
+
+
 class VectorStore:
     def __init__(self) -> None:
         self.client = AsyncQdrantClient(url=settings.qdrant_url, timeout=30)
@@ -70,6 +94,9 @@ class VectorStore:
             await self.client.create_payload_index(
                 self.collection, field_name=field, field_schema=models.PayloadSchemaType.KEYWORD
             )
+        await self.client.create_payload_index(
+            self.collection, field_name=OWNER_FIELD, field_schema=models.PayloadSchemaType.INTEGER
+        )
 
     async def count(self) -> int:
         if not await self.client.collection_exists(self.collection):
@@ -115,10 +142,11 @@ class VectorStore:
         dense: list[float],
         *,
         filters: dict[str, str] | None = None,
+        user_id: int | None = None,
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
         limit = limit or settings.retrieval_top_k
-        flt = build_filter(filters)
+        flt = search_filter(filters, user_id)
         result = await self.client.query_points(
             collection_name=self.collection,
             prefetch=[

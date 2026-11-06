@@ -19,11 +19,11 @@ from pypdf.errors import PdfReadError
 from sqlmodel import col, select
 
 from .config import settings
-from .database import KbDocument, session_factory, utcnow
+from .database import KbDocument, KbPrivateDocument, session_factory, utcnow
 from .llm import embed
 from .ocr import IMAGE_EXTENSIONS, ocr_image
 from .seed import document_id, embedding_text
-from .vector_store import vector_store
+from .vector_store import OWNER_FIELD, vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -200,9 +200,37 @@ def chunk_text(text: str, max_chars: int) -> list[str]:
     return chunks
 
 
-def _payload(doc: KbDocument, chunk: str, index: int, total: int) -> dict:
+async def document_owner(document_id: int) -> int | None:
+    """Właściciel dokumentu prywatnego; None = wiedza wspólna."""
+    async with session_factory() as session:
+        row = await session.get(KbPrivateDocument, document_id)
+        return row.owner_id if row else None
+
+
+async def document_owners() -> dict[int, int]:
+    async with session_factory() as session:
+        rows = (await session.exec(select(KbPrivateDocument))).all()
+        return {r.document_id: r.owner_id for r in rows}
+
+
+async def set_document_owner(document_id: int, owner_id: int | None) -> None:
+    """Ustawia widoczność: owner_id = prywatny dla tego konta, None = wspólny dla wszystkich."""
+    async with session_factory() as session:
+        row = await session.get(KbPrivateDocument, document_id)
+        if owner_id is None:
+            if row is not None:
+                await session.delete(row)
+        elif row is None:
+            session.add(KbPrivateDocument(document_id=document_id, owner_id=owner_id))
+        else:
+            row.owner_id = owner_id
+            session.add(row)
+        await session.commit()
+
+
+def _payload(doc: KbDocument, chunk: str, index: int, total: int, owner_id: int | None) -> dict:
     title = doc.title if total == 1 else f"{doc.title} (cz. {index}/{total})"
-    return {
+    payload = {
         "key": f"kb-{doc.id}-{index}",
         "title": title,
         "text": chunk,
@@ -214,6 +242,9 @@ def _payload(doc: KbDocument, chunk: str, index: int, total: int) -> dict:
         "kb_document_id": doc.id,
         "filename": doc.filename,
     }
+    if owner_id is not None:  # brak pola = fragment wspólny (filtr widoczności w wyszukiwaniu)
+        payload[OWNER_FIELD] = owner_id
+    return payload
 
 
 ChunkProgress = Callable[[int, int], None]  # (fragmenty gotowe, fragmenty łącznie)
@@ -222,13 +253,14 @@ ChunkProgress = Callable[[int, int], None]  # (fragmenty gotowe, fragmenty łąc
 async def index_document(doc: KbDocument, on_progress: ChunkProgress | None = None) -> int:
     """(Re)indeksuje dokument w Qdrant; zwraca liczbę fragmentów."""
     chunks = chunk_text(doc.text, settings.kb_chunk_chars)
+    owner_id = await document_owner(doc.id)  # type: ignore[arg-type]
     await vector_store.delete_kb_document(doc.id)  # type: ignore[arg-type]
     total = len(chunks)
     if on_progress:
         on_progress(0, total)
     for start in range(0, total, _BATCH):
         payloads = [
-            _payload(doc, chunk, start + i + 1, total)
+            _payload(doc, chunk, start + i + 1, total, owner_id)
             for i, chunk in enumerate(chunks[start : start + _BATCH])
         ]
         texts = [embedding_text(p) for p in payloads]

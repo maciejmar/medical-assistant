@@ -129,6 +129,8 @@ export interface SystemStats {
 
 export type KbCategory = 'disorder' | 'icd' | 'technique' | 'diagnostics';
 export type KbAudience = 'children' | 'adults' | 'all';
+/** shared – wiedza wspólna dla wszystkich; private – tylko dla konta, które ją dodało. */
+export type KbVisibility = 'shared' | 'private';
 
 export interface KbDocument {
   id: number;
@@ -147,6 +149,7 @@ export interface KbDocument {
   /** Ścieżka w katalogu źródłowym (import) – null dla plików wgranych w panelu. */
   source_path: string | null;
   pages: number;
+  visibility: KbVisibility;
   characters: number;
   preview: string;
 }
@@ -158,6 +161,7 @@ export interface KbDocumentPatch {
   icd10: string;
   icd11: string;
   tags: string;
+  visibility: KbVisibility;
 }
 
 export type KbImportPhase = 'idle' | 'scan' | 'ocr' | 'extract' | 'embed' | 'done';
@@ -217,6 +221,7 @@ export interface KbUploadInput {
   icd10: string;
   icd11: string;
   tags: string;
+  visibility: KbVisibility;
 }
 
 export interface UserCreateInput {

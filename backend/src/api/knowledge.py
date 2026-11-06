@@ -1,4 +1,9 @@
-"""Baza wiedzy w panelu administratora: wgrywanie plików, import katalogu, edycja, usuwanie."""
+"""Baza wiedzy w panelu administratora: wgrywanie plików, import katalogu, edycja, usuwanie.
+
+Każdy materiał jest wspólny (widoczny dla wszystkich użytkowników i używany w odpowiedziach dla
+każdego) albo prywatny (tylko dla konta, które go dodało – w panelu i w jego rozmowach).
+Cudze materiały prywatne są niewidoczne: lista ich nie zawiera, a operacje zwracają 404.
+"""
 
 import asyncio
 from pathlib import Path, PurePath
@@ -9,9 +14,15 @@ from sqlmodel import col, select
 
 from ..auth import CurrentAdmin, SessionDep
 from ..config import settings
-from ..database import KbDocument
+from ..database import KbDocument, KbPrivateDocument, User
 from ..kb_import import UnsafePathError, job, start_background_import, store_file
-from ..knowledge import ExtractionError, extract_text, index_and_record
+from ..knowledge import (
+    ExtractionError,
+    document_owners,
+    extract_text,
+    index_and_record,
+    set_document_owner,
+)
 from ..ocr import OcrUnavailableError
 from ..seed_data import DOCUMENTS
 from ..vector_store import vector_store
@@ -28,30 +39,41 @@ router = APIRouter(prefix="/admin/knowledge", tags=["admin"])
 
 Category = Literal["disorder", "icd", "technique", "diagnostics"]
 Audience = Literal["children", "adults", "all"]
+Visibility = Literal["shared", "private"]
 
 
-def _out(doc: KbDocument) -> KbDocumentOut:
+def _owner_for(visibility: Visibility, user: User) -> int | None:
+    return user.id if visibility == "private" else None
+
+
+def _out(doc: KbDocument, owner_id: int | None) -> KbDocumentOut:
     return KbDocumentOut.model_validate(
         {
             **doc.model_dump(exclude={"text"}),
+            "visibility": "private" if owner_id is not None else "shared",
             "characters": len(doc.text),
             "preview": doc.text[:400],
         }
     )
 
 
-async def _get(session: SessionDep, document_id: int) -> KbDocument:
+async def _get(session: SessionDep, document_id: int, admin: User) -> tuple[KbDocument, int | None]:
+    """Dokument widoczny dla administratora: wspólny albo jego prywatny (cudzy prywatny → 404)."""
     doc = (await session.exec(select(KbDocument).where(KbDocument.id == document_id))).first()
-    if doc is None:
+    private = await session.get(KbPrivateDocument, document_id)
+    if doc is None or (private is not None and private.owner_id != admin.id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie znaleziono dokumentu")
-    return doc
+    return doc, private.owner_id if private else None
 
 
 @router.get("", response_model=KnowledgeBaseOut)
 async def list_documents(session: SessionDep, admin: CurrentAdmin) -> KnowledgeBaseOut:
+    owners = await document_owners()
     docs = await session.exec(select(KbDocument).order_by(col(KbDocument.created_at).desc()))
+    visible = [d for d in docs.all() if owners.get(d.id, admin.id) == admin.id]  # type: ignore[arg-type]
     return KnowledgeBaseOut(
-        builtin_documents=len(DOCUMENTS), documents=[_out(d) for d in docs.all()]
+        builtin_documents=len(DOCUMENTS),
+        documents=[_out(d, owners.get(d.id)) for d in visible],  # type: ignore[arg-type]
     )
 
 
@@ -59,13 +81,14 @@ async def list_documents(session: SessionDep, admin: CurrentAdmin) -> KnowledgeB
 async def upload_document(
     session: SessionDep,
     admin: CurrentAdmin,
-    file: Annotated[UploadFile, File(description="PDF (z tekstem), DOCX, MD lub TXT")],
+    file: Annotated[UploadFile, File(description="PDF (z tekstem), DOCX, ODT, MD, TXT, zdjęcie")],
     title: Annotated[str, Form(min_length=2, max_length=300)],
     category: Annotated[Category, Form()],
     audience: Annotated[Audience, Form()] = "all",
     icd10: Annotated[str, Form(max_length=50)] = "",
     icd11: Annotated[str, Form(max_length=50)] = "",
     tags: Annotated[str, Form(max_length=500)] = "",
+    visibility: Annotated[Visibility, Form()] = "shared",
 ) -> KbDocumentOut:
     filename = PurePath(file.filename or "dokument.txt").name
     data = await file.read(settings.kb_max_upload_bytes + 1)
@@ -95,7 +118,9 @@ async def upload_document(
     session.add(doc)
     await session.commit()
     await session.refresh(doc)
-    return _out(await index_and_record(doc))
+    owner_id = _owner_for(visibility, admin)
+    await set_document_owner(doc.id, owner_id)  # type: ignore[arg-type]
+    return _out(await index_and_record(doc), owner_id)
 
 
 def _import_status() -> KbImportStatusOut:
@@ -138,9 +163,10 @@ async def store_source_file(
     admin: CurrentAdmin,
     file: Annotated[UploadFile, File()],
     relative_path: Annotated[str, Form(min_length=1, max_length=600)],
+    visibility: Annotated[Visibility, Form()] = "shared",
 ) -> KbStoredFileOut:
-    """Zapisuje plik (np. z wgrywanego folderu) w katalogu bazy wiedzy na serwerze.
-    Indeksowanie wykonuje import katalogu (uruchamiany po wgraniu lub automatycznie)."""
+    """Zapisuje plik (np. z wgrywanego folderu) w katalogu bazy wiedzy na serwerze; prywatne –
+    w prywatne/<id konta>/. Indeksowanie wykonuje import katalogu (po wgraniu lub automatycznie)."""
     root = Path(settings.kb_source_dir)
     if not root.is_dir():
         raise HTTPException(
@@ -152,7 +178,9 @@ async def store_source_file(
     if len(data) > settings.kb_max_upload_bytes:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Plik jest zbyt duży")
     try:
-        path, changed = await asyncio.to_thread(store_file, root, relative_path, data)
+        path, changed = await asyncio.to_thread(
+            store_file, root, relative_path, data, _owner_for(visibility, admin)
+        )
     except UnsafePathError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     except OSError as exc:
@@ -184,26 +212,30 @@ async def start_import(admin: CurrentAdmin) -> KbImportStatusOut:
 async def update_document(
     document_id: int, body: KbDocumentPatch, session: SessionDep, admin: CurrentAdmin
 ) -> KbDocumentOut:
-    """Zmiana tytułu/metadanych – fragmenty w Qdrant są indeksowane ponownie (tytuł w źródłach)."""
-    doc = await _get(session, document_id)
-    for name, value in body.model_dump().items():
+    """Zmiana tytułu/metadanych/widoczności – fragmenty w Qdrant są indeksowane ponownie."""
+    doc, owner_id = await _get(session, document_id, admin)
+    for name, value in body.model_dump(exclude={"visibility"}).items():
         setattr(doc, name, value.strip() if isinstance(value, str) else value)
     session.add(doc)
     await session.commit()
     await session.refresh(doc)
-    return _out(await index_and_record(doc))
+    if body.visibility is not None:
+        owner_id = _owner_for(body.visibility, admin)
+        await set_document_owner(document_id, owner_id)
+    return _out(await index_and_record(doc), owner_id)
 
 
 @router.post("/{document_id}/reindex", response_model=KbDocumentOut)
 async def reindex_document(
     document_id: int, session: SessionDep, admin: CurrentAdmin
 ) -> KbDocumentOut:
-    return _out(await index_and_record(await _get(session, document_id)))
+    doc, owner_id = await _get(session, document_id, admin)
+    return _out(await index_and_record(doc), owner_id)
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(document_id: int, session: SessionDep, admin: CurrentAdmin) -> Response:
-    doc = await _get(session, document_id)
+    doc, _ = await _get(session, document_id, admin)
     try:
         await vector_store.delete_kb_document(document_id)
     except Exception as exc:
@@ -211,6 +243,7 @@ async def delete_document(document_id: int, session: SessionDep, admin: CurrentA
             status.HTTP_502_BAD_GATEWAY,
             "Nie udało się usunąć fragmentów z Qdrant – dokument pozostawiono, spróbuj ponownie.",
         ) from exc
+    await set_document_owner(document_id, None)
     await session.delete(doc)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -6,6 +6,7 @@ import {
   KbDocumentPatch,
   KbImportStatus,
   KbUploadInput,
+  KbVisibility,
   KnowledgeBase,
   LlmCallDetail,
   LlmCallPage,
@@ -82,6 +83,7 @@ export class AdminService {
     form.append('icd10', input.icd10);
     form.append('icd11', input.icd11);
     form.append('tags', input.tags);
+    form.append('visibility', input.visibility);
     return this.http.post<KbDocument>('/api/admin/knowledge', form);
   }
 
@@ -89,11 +91,17 @@ export class AdminService {
     return this.http.patch<KbDocument>(`/api/admin/knowledge/${id}`, patch);
   }
 
-  /** Zapisuje plik w katalogu bazy wiedzy na serwerze (ścieżka względna, np. z wgrywanego folderu). */
-  storeKnowledgeFile(file: File, relativePath: string): Observable<{ path: string; changed: boolean }> {
+  /** Zapisuje plik w katalogu bazy wiedzy na serwerze (ścieżka względna, np. z wgrywanego folderu);
+   *  materiał prywatny trafia do folderu konta (prywatne/<id>/). */
+  storeKnowledgeFile(
+    file: File,
+    relativePath: string,
+    visibility: KbVisibility,
+  ): Observable<{ path: string; changed: boolean }> {
     const form = new FormData();
     form.append('file', file, file.name);
     form.append('relative_path', relativePath);
+    form.append('visibility', visibility);
     return this.http.post<{ path: string; changed: boolean }>('/api/admin/knowledge/files', form);
   }
 

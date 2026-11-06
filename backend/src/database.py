@@ -202,6 +202,21 @@ class KbDocument(SQLModel, table=True):
     indexed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
 
 
+class KbPrivateDocument(SQLModel, table=True):
+    """Dokument bazy wiedzy widoczny tylko dla właściciela (brak wpisu = wiedza wspólna).
+    Osobna tabela zamiast kolumny w kb_documents – bez migracji istniejącej tabeli."""
+
+    __tablename__ = "kb_private_documents"
+
+    document_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("kb_documents.id"), primary_key=True)
+    )
+    owner_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    )
+    created_at: datetime = _ts()
+
+
 class OcrPage(SQLModel, table=True):
     """Pamięć podręczna OCR (klucz: SHA-256 obrazu) – każde zdjęcie rozpoznawane jest raz."""
 
