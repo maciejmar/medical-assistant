@@ -10,6 +10,7 @@ import {
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AudioRecordingService } from '../../core/audio-recording.service';
+import { SpeechService } from '../../core/speech.service';
 import { PatientsService } from '../../core/patients.service';
 import { NoteSource, Patient, PatientChatMessage, PatientNote } from '../../shared/models';
 
@@ -198,7 +199,21 @@ import { PatientCareComponent } from './patient-care.component';
                   {{ n.created_at | date: 'dd.MM.yyyy HH:mm' }}
                   @if (n.source === 'dictated') { <span class="badge ml-1 bg-brand-50 text-brand-700">dyktowana</span> }
                 </span>
-                <button type="button" class="text-slate-400 hover:text-red-600" (click)="removeNote(n)">Usuń</button>
+                <span class="flex items-center gap-3">
+                  @if (speech.isSupported) {
+                    <button
+                      type="button"
+                      class="grid h-8 w-8 place-items-center rounded-full text-lg leading-none transition hover:bg-brand-50"
+                      [class.animate-pulse]="speech.speakingId() === 'note-' + n.id"
+                      [class.bg-brand-50]="speech.speakingId() === 'note-' + n.id"
+                      [attr.aria-label]="speech.speakingId() === 'note-' + n.id ? 'Zatrzymaj odczyt notatki' : 'Odsłuchaj notatkę'"
+                      [attr.aria-pressed]="speech.speakingId() === 'note-' + n.id"
+                      [title]="speech.speakingId() === 'note-' + n.id ? 'Zatrzymaj odczyt' : 'Odsłuchaj notatkę'"
+                      (click)="speech.toggle('note-' + n.id, n.content)"
+                    >{{ speech.speakingId() === 'note-' + n.id ? '⏹️' : '🗣️' }}</button>
+                  }
+                  <button type="button" class="text-slate-400 hover:text-red-600" (click)="removeNote(n)">Usuń</button>
+                </span>
               </div>
               <p class="whitespace-pre-wrap text-sm">{{ n.content }}</p>
             </li>
@@ -215,6 +230,7 @@ import { PatientCareComponent } from './patient-care.component';
 })
 export class PatientInfoComponent implements OnDestroy {
   protected readonly recorder = inject(AudioRecordingService);
+  protected readonly speech = inject(SpeechService);
   private readonly api = inject(PatientsService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -269,6 +285,7 @@ export class PatientInfoComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.recorder.cancel();
+    this.speech.stop();
   }
 
   protected save(): void {

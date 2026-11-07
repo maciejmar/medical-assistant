@@ -13,7 +13,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
     <footer class="fixed inset-x-0 bottom-0 z-10 flex h-12 items-center justify-between gap-3 bg-[#02121c] px-4 text-xs text-slate-300">
       <div class="flex min-w-0 items-center gap-2">
         <a href="https://webaby.io" target="_blank" rel="noopener noreferrer" class="shrink-0" aria-label="Webaby – strona firmy">
-          <img src="assets/images/webabylogo-mark.png" alt="Webaby" width="20" height="28" class="h-7 w-auto invert" />
+          <img src="assets/images/webabylogo-mark.png" alt="Webaby" width="25" height="36" class="h-9 w-auto invert" />
         </a>
         <p class="truncate">
           © {{ year }} Webaby<span class="hidden sm:inline">. Wszelkie prawa zastrzeżone.</span>

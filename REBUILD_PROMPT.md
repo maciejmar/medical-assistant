@@ -126,9 +126,12 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
   logo Webaby (`webabylogo-mark.png` – przycięty `webabylogo.png`, czarny znak odwrócony filtrem `invert` do bieli),
   „© <rok> Webaby. Wszelkie prawa zastrzeżone.”, link https://webaby.io, `mailto:contact@webaby.io` (na telefonie „Kontakt”),
   ikony social media (WhatsApp, Facebook, Instagram, X); `main` ma `pb-16`, żeby stopka nie zasłaniała treści.
-  Logo Webaby (48 px) także po prawej stronie paska nawigacji, jako link do webaby.io.
+  Logo Webaby (64 px, w stopce 36 px) także po prawej stronie paska nawigacji, jako link do webaby.io.
 - **Karta pacjenta** – edycja danych, nowa notatka (wpisywana lub **dyktowana**: `MediaRecorder` →
-  `POST /api/audio/transcribe` → Whisper, język `pl`, limit 25 MB, dozwolone formaty audio), lista notatek.
+  `POST /api/audio/transcribe` → Whisper, język `pl`, limit 25 MB, dozwolone formaty audio), lista notatek;
+  każda notatka ma przycisk 🗣️ „Odsłuchaj” (⏹️ zatrzymuje) – odczyt syntezatorem przeglądarki (Web Speech API,
+  `core/speech.service.ts`), polski głos lokalny systemu preferowany (np. Paulina w Windows; głosy sieciowe wysyłają
+  tekst na zewnątrz), tekst dzielony na zdania ≤ 200 znaków (Chrome przerywa długie wypowiedzi); bez backendu.
 - **Historia pacjenta** – zakładki „Sesje i notatki” oraz „Pytania do asystenta” (`GET /api/patients/{id}/chat-history`:
   wiadomości z `patient_id` pacjenta, łączone w pary pytanie–odpowiedź, link „Otwórz rozmowę”).
 - **Konto pacjenta, zalecenia, powiadomienia** (komponent `patient-care`): utworzenie/powiązanie konta pacjenta
@@ -298,6 +301,7 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-07** – Odsłuchiwanie notatek (synteza mowy w przeglądarce, polski głos lokalny); większe logo Webaby.
 - **2026-11-07** – Logo Webaby w pasku nawigacji i wspólna stopka całej aplikacji (copyright, webaby.io, contact@webaby.io).
 - **2026-11-07** – Ponowne przetwarzanie dokumentów z oryginałów (cała baza lub jeden dokument): rejestr silników OCR,
   pamięć OCR per silnik (`kb_ocr_results`, bez utraty starych odczytów), opcja przebudowy indeksu od zera; pojedyncze

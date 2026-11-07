@@ -48,7 +48,7 @@ import { AuthService } from '../core/auth.service';
           <span class="px-3 py-1 text-xs text-slate-500 sm:ml-2">{{ auth.user()?.full_name }}</span>
           <button type="button" class="btn-secondary" (click)="auth.logout()">Wyloguj</button>
           <a href="https://webaby.io" target="_blank" rel="noopener noreferrer" class="px-3 py-1 sm:ml-3 sm:border-l sm:border-slate-200 sm:pl-5" aria-label="Webaby – twórca aplikacji">
-            <img src="assets/images/webabylogo-mark.png" alt="Webaby" width="34" height="48" class="h-12 w-auto opacity-80 transition hover:opacity-100" />
+            <img src="assets/images/webabylogo-mark.png" alt="Webaby" width="45" height="64" class="h-16 w-auto opacity-80 transition hover:opacity-100" />
           </a>
         </nav>
       </div>
