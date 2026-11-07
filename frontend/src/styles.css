@@ -73,3 +73,79 @@ body {
     @apply backdrop-blur-sm;
   }
 }
+
+/* Odpowiedzi asystenta renderowane z Markdownu (shared/markdown.pipe.ts) – typografia bez wtyczki
+   @tailwindcss/typography; treść wstawiana przez [innerHTML], więc style muszą być globalne. */
+@layer components {
+  .md {
+    @apply leading-relaxed text-slate-700;
+  }
+  .md > :first-child {
+    @apply mt-0;
+  }
+  .md > :last-child {
+    @apply mb-0;
+  }
+  .md p {
+    @apply my-2;
+  }
+  .md h1,
+  .md h2 {
+    @apply mb-2 mt-4 border-b border-slate-200 pb-1 text-base font-semibold text-slate-900;
+  }
+  .md h3 {
+    @apply mb-1.5 mt-4 text-[0.95rem] font-semibold text-brand-800;
+  }
+  .md h4,
+  .md h5,
+  .md h6 {
+    @apply mb-1 mt-3 text-sm font-semibold text-slate-800;
+  }
+  .md strong {
+    @apply font-semibold text-slate-900;
+  }
+  .md ul,
+  .md ol {
+    @apply my-2 space-y-1 pl-5;
+  }
+  .md ul {
+    @apply list-disc marker:text-brand-500;
+  }
+  .md ol {
+    @apply list-decimal marker:font-semibold marker:text-brand-600;
+  }
+  .md li > ul,
+  .md li > ol {
+    @apply my-1;
+  }
+  .md blockquote {
+    @apply my-3 rounded-r-lg border-l-4 border-brand-300 bg-brand-50/60 px-3 py-2 text-slate-600;
+  }
+  .md a {
+    @apply font-medium text-brand-700 underline decoration-brand-300 underline-offset-2 hover:text-brand-900;
+  }
+  .md code {
+    @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.85em] text-slate-800;
+  }
+  .md pre {
+    @apply my-3 overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100;
+  }
+  .md pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+  .md hr {
+    @apply my-4 border-slate-200;
+  }
+  .md table {
+    @apply my-3 block w-full overflow-x-auto border-collapse text-xs;
+  }
+  .md th {
+    @apply border border-slate-200 bg-slate-50 px-2 py-1 text-left font-semibold;
+  }
+  .md td {
+    @apply border border-slate-200 px-2 py-1 align-top;
+  }
+  .md .md-cite {
+    @apply ml-0.5 inline-block rounded bg-brand-50 px-1 align-super text-[0.7em] font-semibold leading-none text-brand-700;
+  }
+}

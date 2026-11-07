@@ -12,6 +12,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { ChatService } from '../../core/chat.service';
+import { MarkdownPipe } from '../../shared/markdown.pipe';
 import { PatientsService } from '../../core/patients.service';
 import {
   ChatEvent,
@@ -43,7 +44,7 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, MarkdownPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="assistant-page">
@@ -109,7 +110,12 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
                 class="max-w-[92%] rounded-2xl px-4 py-3 text-sm shadow-sm sm:max-w-[80%]"
                 [class]="m.role === 'user' ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white'"
               >
-                <p class="whitespace-pre-wrap break-words">{{ m.content }}@if (m.pending && m.content) {<span class="ml-0.5 animate-pulse">▍</span>}</p>
+                @if (m.role === 'assistant') {
+                  <div class="md break-words" [innerHTML]="m.content | markdown"></div>
+                  @if (m.pending && m.content) {<span class="animate-pulse text-brand-600" aria-hidden="true">▍</span>}
+                } @else {
+                  <p class="whitespace-pre-wrap break-words">{{ m.content }}</p>
+                }
                 @if (m.pending && !m.content) {
                   <p class="animate-pulse text-slate-500">{{ status() }}</p>
                 }

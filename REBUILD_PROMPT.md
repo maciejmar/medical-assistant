@@ -170,6 +170,11 @@ krawędź 4 px ma kolor statusu (sky-400/emerald/amber/red-500); karta „+” n
   (`PUT /api/patients/{id}/account` – istniejące konto musi mieć `ROLE_PATIENT` i nie być powiązane z inną kartą;
   nowe wymaga hasła), odłączenie; CRUD zaleceń z opcją „powiadom e-mailem”; wysyłka powiadomień e-mail
   (SMTP z biblioteki standardowej w wątku; brak konfiguracji → zapis ze statusem `failed`).
+- **Formatowanie odpowiedzi** – odpowiedzi asystenta (czat i zakładka „Pytania do asystenta”) renderowane z Markdownu:
+  `shared/markdown.pipe.ts` (`marked` 12.0.2, GFM, `breaks: true`; surowy HTML z odpowiedzi escapowany, linki w nowej karcie,
+  wynik przez sanitizer Angulara w `[innerHTML]`), odnośniki `[1]`, `[1, 2]` → `<sup class="md-cite">` (poza kodem);
+  typografia w klasie `.md` w `styles.css` (nagłówki, listy z kolorowymi markerami, cytaty, tabele, kod) – bez wtyczki
+  typography. Pytania lekarza zostają zwykłym tekstem.
 - **Asystent** – czat ze źródłami (rozwijana lista, trafność, znacznik „luźno związane”), wybór pacjenta,
   lista rozmów, licznik tokenów; tło `logoped-sepia.png`.
 
@@ -348,6 +353,8 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-08** – Odpowiedzi asystenta formatowane z Markdownu (nagłówki, listy, pogrubienia, tabele, odnośniki do źródeł)
+  zamiast surowych znaków `#` i `*`.
 - **2026-11-07** – Karty kroków planu na lekko beżowym tle (białe zlewały się z sekcją); status – kolor lewej krawędzi i ikona.
 - **2026-11-07** – Blok „Plan działania” w karcie pacjenta: diagram kart-kroków ze statusami (zakończony / zawieszony /
   niewykonalny, nowy = zaplanowany), okno edycji z opisem, zmianą nazwy, kolejności i usuwaniem; opcjonalnie w kontekście LLM.

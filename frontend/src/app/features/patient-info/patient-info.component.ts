@@ -48,12 +48,13 @@ export function toExchanges(messages: PatientChatMessage[]): PromptExchange[] {
 }
 import { ageFromBirthDate, emptyToNull, formatDuration } from '../../shared/utils';
 import { IconComponent } from '../../shared/icon.component';
+import { MarkdownPipe } from '../../shared/markdown.pipe';
 import { PatientCareComponent } from './patient-care.component';
 
 @Component({
   selector: 'app-patient-info',
   standalone: true,
-  imports: [ReactiveFormsModule, FormsModule, RouterLink, DatePipe, IconComponent, PatientCareComponent],
+  imports: [ReactiveFormsModule, FormsModule, RouterLink, DatePipe, IconComponent, MarkdownPipe, PatientCareComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <a routerLink="/dashboard" class="mb-4 inline-block text-sm text-brand-700 hover:underline">← Wróć do pacjentów</a>
@@ -180,7 +181,7 @@ import { PatientCareComponent } from './patient-care.component';
                 @if (e.answer) {
                   <details class="mt-2">
                     <summary class="cursor-pointer text-xs text-slate-500">Odpowiedź asystenta</summary>
-                    <p class="mt-1 whitespace-pre-wrap rounded-lg bg-slate-50 p-2 text-sm">{{ e.answer }}</p>
+                    <div class="md mt-1 rounded-lg bg-slate-50 p-3 text-sm" [innerHTML]="e.answer | markdown"></div>
                   </details>
                 } @else {
                   <p class="mt-1 text-xs text-slate-400">Brak zapisanej odpowiedzi.</p>
