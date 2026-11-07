@@ -10,9 +10,12 @@ import { AuthService } from '../core/auth.service';
   template: `
     <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
-        <a [routerLink]="auth.homeRoute()" class="flex items-center gap-2 font-bold text-brand-700">
+        <a [routerLink]="auth.homeRoute()" class="flex items-center gap-3 text-brand-700" aria-label="Logoped Assistant – strona główna">
           <img src="assets/images/logopedic-logo-384.png" alt="" width="120" height="120" class="h-[120px] w-[120px] rounded-full bg-white object-cover ring-1 ring-slate-200" />
-          <span>Logoped Assistant</span>
+          <span class="flex flex-col leading-tight">
+            <span class="text-2xl font-bold">Logoped</span>
+            <span class="text-sm font-medium tracking-wide text-brand-600">Assistant</span>
+          </span>
         </a>
 
         <button

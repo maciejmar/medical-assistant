@@ -225,7 +225,8 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
 `features/` (auth, dashboard, patient-info + patient-care, chat, admin-panel + llm-logs + knowledge-base +
 import-progress, patient-portal), `shared/` (modele, navbar, utils). Trasy ładowane leniwie; `homeRoute()`:
 admin → `/admin`, pacjent → `/patient`, lekarz → `/dashboard`. Logo: `assets/images/logopedic-logo-384.png` (zmniejszona, docięta do koła kopia `logopedic-logo.png`, białe tło),
-wyświetlane jako okrągła plakietka (`rounded-full bg-white`) – 120 px w pasku nawigacji, 192 px na stronie logowania.
+wyświetlane jako okrągła plakietka (`rounded-full bg-white`) – 120 px w pasku nawigacji, 192 px na stronie logowania; obok logo w nawigacji nazwa w dwóch liniach: „Logoped” (text-2xl, pogrubione)
+i pod nim „Assistant” (text-sm).
 Kolory marki: `brand-50…900` (teal, `#237d75`
 jako 600); tło `body` – gradient `#c8e4dd → #1f052e`; karty dashboardu/asystenta półprzezroczyste z gradientem.
 
