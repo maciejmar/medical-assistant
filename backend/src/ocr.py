@@ -10,7 +10,7 @@ Wymaga programu tesseract z danymi języka polskiego (w obrazie Dockera: tessera
 
 import io
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 import pytesseract
 from PIL import Image, ImageOps
@@ -98,8 +98,47 @@ def best_rotation(probe: Image.Image) -> int:
     return max(scores, key=lambda angle: scores[angle])
 
 
+class OcrEngine(Protocol):
+    """Silnik OCR. `key()` identyfikuje silnik RAZEM z parametrami – wyniki różnych silników
+    (albo tego samego z innymi ustawieniami) są przechowywane osobno w pamięci podręcznej."""
+
+    name: str
+    label: str
+
+    def key(self) -> str: ...
+
+    def read(self, data: bytes) -> OcrResult: ...
+
+
+class TesseractEngine:
+    name = "tesseract"
+    label = "Tesseract – lokalnie, tylko druk"
+
+    def key(self) -> str:
+        return f"tesseract:{settings.ocr_languages}:c{settings.ocr_min_word_confidence}"
+
+    def read(self, data: bytes) -> OcrResult:
+        return ocr_image(data)
+
+
+# Nowy silnik (np. model wizyjny – wtedy także z odczytem pisma odręcznego) = nowa klasa
+# z unikalnym `name` dopisana do tego rejestru; reszta (pamięć podręczna, ponowne przetwarzanie,
+# wybór w panelu) działa bez zmian.
+ENGINES: dict[str, OcrEngine] = {engine.name: engine for engine in (TesseractEngine(),)}
+
+# Klucz, pod którym dotychczasowy Tesseract zapisywał wyniki (tabela kb_ocr_pages).
+LEGACY_TESSERACT_KEY = "tesseract:pol+eng:c60"
+
+
+def get_engine(name: str | None = None) -> OcrEngine:
+    engine = ENGINES.get(name or settings.ocr_engine)
+    if engine is None:
+        raise ValueError(f"Nieznany silnik OCR: {name or settings.ocr_engine}")
+    return engine
+
+
 def ocr_image(data: bytes) -> OcrResult:
-    """Rozpoznaje druk na zdjęciu strony. Operacja blokująca (CPU) – wywoływać w wątku."""
+    """Rozpoznaje druk na zdjęciu strony (Tesseract). Operacja blokująca – wywoływać w wątku."""
     try:
         image = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("L")
     except Exception as exc:

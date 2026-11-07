@@ -194,10 +194,26 @@ export interface KbImportProgress {
   recent: KbImportRecent[];
 }
 
+export interface KbOcrEngine {
+  name: string;
+  label: string;
+}
+
+/** Ponowne przygotowanie dokumentów z oryginałów (OCR → fragmenty → embedding). */
+export interface KbReprocessInput {
+  engine: string | null;
+  force_ocr: boolean;
+  rebuild_index: boolean;
+}
+
 export interface KbImportStatus {
   source_dir: string;
   source_available: boolean;
   running: boolean;
+  /** Co robi zadanie (synchronizacja / przetwarzanie od nowa / jeden dokument). */
+  label: string;
+  ocr_engine: string;
+  ocr_engines: KbOcrEngine[];
   started_at: string | null;
   finished_at: string | null;
   progress: KbImportProgress;

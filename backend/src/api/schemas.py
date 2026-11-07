@@ -312,10 +312,24 @@ class KbImportProgressOut(BaseModel):
     recent: list[KbImportRecentOut]
 
 
+class KbOcrEngineOut(BaseModel):
+    name: str
+    label: str
+
+
+class KbReprocessIn(BaseModel):
+    engine: str | None = Field(default=None, max_length=50)
+    force_ocr: bool = True
+    rebuild_index: bool = False
+
+
 class KbImportStatusOut(BaseModel):
     source_dir: str
     source_available: bool
     running: bool
+    label: str
+    ocr_engine: str
+    ocr_engines: list[KbOcrEngineOut]
     started_at: datetime | None
     finished_at: datetime | None
     progress: KbImportProgressOut

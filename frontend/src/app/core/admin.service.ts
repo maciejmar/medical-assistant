@@ -5,6 +5,7 @@ import {
   KbDocument,
   KbDocumentPatch,
   KbImportStatus,
+  KbReprocessInput,
   KbUploadInput,
   KbVisibility,
   KnowledgeBase,
@@ -103,6 +104,14 @@ export class AdminService {
     form.append('relative_path', relativePath);
     form.append('visibility', visibility);
     return this.http.post<{ path: string; changed: boolean }>('/api/admin/knowledge/files', form);
+  }
+
+  reprocessAll(input: KbReprocessInput): Observable<KbImportStatus> {
+    return this.http.post<KbImportStatus>('/api/admin/knowledge/reprocess', input);
+  }
+
+  reprocessDocument(id: number, input: KbReprocessInput): Observable<KbImportStatus> {
+    return this.http.post<KbImportStatus>(`/api/admin/knowledge/${id}/reprocess`, input);
   }
 
   importStatus(): Observable<KbImportStatus> {

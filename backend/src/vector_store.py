@@ -118,6 +118,12 @@ class VectorStore:
             wait=True,
         )
 
+    async def drop_collection(self) -> None:
+        """Usuwa całą kolekcję (przebudowa indeksu od zera); ensure_collection utworzy ją ponownie
+        z wymiarem wektorów bieżącego modelu embeddingów."""
+        if await self.client.collection_exists(self.collection):
+            await self.client.delete_collection(self.collection)
+
     async def delete_kb_document(self, document_id: int) -> None:
         """Usuwa wszystkie fragmenty pliku wgranego przez administratora."""
         if not await self.client.collection_exists(self.collection):

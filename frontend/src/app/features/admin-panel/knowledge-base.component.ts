@@ -1,11 +1,18 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AdminService } from '../../core/admin.service';
-import { KbAudience, KbCategory, KbDocument, KbImportStatus, KbVisibility } from '../../shared/models';
+import {
+  KbAudience,
+  KbCategory,
+  KbDocument,
+  KbImportStatus,
+  KbReprocessInput,
+  KbVisibility,
+} from '../../shared/models';
 import { ImportProgressComponent, UploadState } from './import-progress.component';
 
 const ACCEPT = '.pdf,.docx,.odt,.md,.txt,.jpg,.jpeg,.png';
@@ -116,6 +123,43 @@ function apiError(err: unknown, fallback: string): string {
         }
       </div>
 
+      <details class="mt-4 rounded-lg border border-slate-200 p-3">
+        <summary class="cursor-pointer text-sm font-semibold text-slate-700">
+          Przetwórz dokumenty od nowa – np. innym silnikiem OCR albo po zmianie modelu embeddingów
+        </summary>
+        <div class="mt-3 grid gap-3 sm:grid-cols-3">
+          <div>
+            <label class="label" for="kb-engine">Silnik OCR</label>
+            <select id="kb-engine" class="field" (change)="reprocessEngine.set($any($event.target).value)">
+              @for (e of importStatus()?.ocr_engines ?? []; track e.name) {
+                <option [value]="e.name" [selected]="e.name === selectedEngine()">{{ e.label }}</option>
+              }
+            </select>
+          </div>
+          <label class="flex cursor-pointer items-start gap-2 text-sm">
+            <input type="checkbox" class="mt-1" [checked]="reprocessForceOcr()" (change)="reprocessForceOcr.set($any($event.target).checked)" />
+            <span>
+              <span class="font-semibold">OCR zdjęć od nowa</span>
+              <span class="block text-xs text-slate-500">Bez zaznaczenia użyte zostaną zapamiętane odczyty tego silnika – wtedy tylko podział na fragmenty i embedding (szybko).</span>
+            </span>
+          </label>
+          <label class="flex cursor-pointer items-start gap-2 text-sm">
+            <input type="checkbox" class="mt-1" [checked]="reprocessRebuild()" (change)="reprocessRebuild.set($any($event.target).checked)" />
+            <span>
+              <span class="font-semibold">Przebuduj cały indeks od zera</span>
+              <span class="block text-xs text-slate-500">Potrzebne po zmianie modelu embeddingów. Do końca przebudowy asystent ma niepełną wiedzę.</span>
+            </span>
+          </label>
+        </div>
+        <button type="button" class="btn-secondary mt-3" [disabled]="importStatus()?.running || !importStatus()?.source_available" (click)="reprocessAll()">
+          Przetwórz wszystkie dokumenty od nowa
+        </button>
+        <p class="mt-2 text-xs text-slate-500">
+          Źródłem są oryginały w katalogu materiałów. Tytuły, kategorie i widoczność zostają. Pełny OCR ok. 1000 zdjęć trwa około godziny.
+          Pojedynczy dokument przetworzysz przyciskiem „Przetwórz ponownie” na liście – z powyższymi ustawieniami silnika i OCR.
+        </p>
+      </details>
+
       <app-import-progress [status]="importStatus()" [upload]="uploadState()" />
     </section>
 
@@ -215,7 +259,10 @@ function apiError(err: unknown, fallback: string): string {
               <div class="flex items-center gap-2">
                 <span class="badge" [class]="statusClass(d)">{{ statusLabel(d) }}</span>
                 <button type="button" class="btn-secondary !px-2 !py-1 !text-xs" [disabled]="busyId() === d.id" (click)="edit(d)">Edytuj</button>
-                <button type="button" class="btn-secondary !px-2 !py-1 !text-xs" [disabled]="busyId() === d.id" (click)="reindex(d)">Indeksuj ponownie</button>
+                <button type="button" class="btn-secondary !px-2 !py-1 !text-xs" [disabled]="busyId() === d.id" (click)="reindex(d)" title="Ponowny podział na fragmenty i embedding zapisanego tekstu">Indeksuj ponownie</button>
+                @if (d.source_path) {
+                  <button type="button" class="btn-secondary !px-2 !py-1 !text-xs" [disabled]="busyId() === d.id || importStatus()?.running" (click)="reprocessDocument(d)" title="Od oryginału: OCR wybranym silnikiem, fragmenty, embedding">Przetwórz ponownie</button>
+                }
                 <button type="button" class="btn-danger !px-2 !py-1 !text-xs" [disabled]="busyId() === d.id" (click)="remove(d)">Usuń</button>
               </div>
             </div>
@@ -285,6 +332,13 @@ export class KnowledgeBaseComponent {
   protected readonly visibilities: KbVisibility[] = ['shared', 'private'];
   protected readonly visibilityLabels = VISIBILITY_LABELS;
   protected readonly folderVisibility = signal<KbVisibility>('shared');
+  protected readonly reprocessEngine = signal<string | null>(null);
+  protected readonly reprocessForceOcr = signal(true);
+  protected readonly reprocessRebuild = signal(false);
+  /** Wybrany silnik OCR – domyślnie ten z ustawień serwera. */
+  protected readonly selectedEngine = computed(
+    () => this.reprocessEngine() ?? this.importStatus()?.ocr_engine ?? null,
+  );
 
   protected readonly documents = signal<KbDocument[]>([]);
   protected readonly builtin = signal(0);
@@ -369,6 +423,51 @@ export class KnowledgeBaseComponent {
     this.folderFiles.set([]);
     folderInput.value = '';
     this.startImport();
+  }
+
+  private reprocessInput(rebuildIndex: boolean): KbReprocessInput {
+    return {
+      engine: this.selectedEngine(),
+      force_ocr: this.reprocessForceOcr(),
+      rebuild_index: rebuildIndex,
+    };
+  }
+
+  protected reprocessAll(): void {
+    const rebuild = this.reprocessRebuild();
+    const details = [
+      this.reprocessForceOcr()
+        ? 'OCR wszystkich zdjęć zostanie wykonany od nowa – to może potrwać około godziny.'
+        : 'Użyte zostaną zapamiętane odczyty OCR – przetwarzanie obejmie podział na fragmenty i embedding.',
+      rebuild
+        ? 'Cały indeks zostanie usunięty i zbudowany od zera – do końca przetwarzania asystent będzie miał niepełną wiedzę.'
+        : '',
+    ].filter(Boolean);
+    if (!confirm(`Przetworzyć od nowa WSZYSTKIE dokumenty z oryginałów?\n\n${details.join('\n\n')}`)) {
+      return;
+    }
+    this.startReprocess(this.api.reprocessAll(this.reprocessInput(rebuild)));
+  }
+
+  protected reprocessDocument(doc: KbDocument): void {
+    if (!confirm(`Przetworzyć ponownie „${doc.title}” z oryginału (OCR, fragmenty, embedding)?`)) {
+      return;
+    }
+    this.startReprocess(this.api.reprocessDocument(doc.id, this.reprocessInput(false)));
+  }
+
+  private startReprocess(request: Observable<KbImportStatus>): void {
+    this.message.set(null);
+    request.subscribe({
+      next: (status) => {
+        this.importStatus.set(status);
+        this.pollImport();
+      },
+      error: (err: unknown) => {
+        this.failed.set(true);
+        this.message.set(apiError(err, 'Nie udało się uruchomić przetwarzania.'));
+      },
+    });
   }
 
   protected startImport(): void {

@@ -21,7 +21,7 @@ import re
 import sys
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -30,7 +30,7 @@ from PIL import Image
 from sqlmodel import col, select
 
 from .config import settings
-from .database import KbDocument, OcrPage, User, init_db, session_factory
+from .database import KbDocument, OcrCacheEntry, OcrPage, User, init_db, session_factory
 from .knowledge import (
     TEXT_EXTENSIONS,
     ExtractionError,
@@ -38,7 +38,9 @@ from .knowledge import (
     index_and_record,
     set_document_owner,
 )
-from .ocr import IMAGE_EXTENSIONS, ocr_image
+from .ocr import IMAGE_EXTENSIONS, LEGACY_TESSERACT_KEY, OcrEngine, get_engine
+from .seed import seed_builtin
+from .vector_store import vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +79,7 @@ class ImportReport:
     unchanged: list[str] = field(default_factory=list)
     failed: list[str] = field(default_factory=list)
     duplicates: int = 0
+    planned: list[str] = field(default_factory=list)  # ścieżki źródłowe dokumentów w katalogu
 
     def summary(self) -> str:
         return (
@@ -191,6 +194,31 @@ def safe_target(root: Path, relative_path: str) -> Path:
     return target
 
 
+def safe_name(name: str, fallback: str = "plik") -> str:
+    """Nazwa pliku/folderu dopuszczalna w katalogu bazy wiedzy (niedozwolone znaki → „_”)."""
+    cleaned = re.sub(r"[^\w .,+()&'\-]", "_", name).strip(" .") or fallback
+    return cleaned.lstrip(".")[:120] or fallback
+
+
+SINGLE_UPLOADS_DIR = "pojedyncze"
+
+
+def store_single_upload(
+    root: Path, filename: str, data: bytes, owner_id: int | None
+) -> tuple[str, str, int]:
+    """Zapisuje oryginał pliku wgranego w panelu jako „Pojedynczy plik” – każdy w osobnym
+    folderze pojedyncze/<nazwa>-<skrót>/, żeby import traktował go jak osobny dokument.
+    Zwraca (source_path, content_hash, pages) zgodne z tym, co wyliczy import katalogu."""
+    sha = hashlib.sha256(data).hexdigest()
+    name = safe_name(filename)
+    folder = f"{safe_name(Path(name).stem, 'dokument')}-{sha[:8]}"
+    stored, _ = store_file(root, f"{SINGLE_UPLOADS_DIR}/{folder}/{name}", data, owner_id)
+    content_hash = hashlib.sha256(sha.encode()).hexdigest()  # jak ImportUnit.content_hash
+    if Path(name).suffix.lower() in IMAGE_EXTENSIONS:
+        return stored.rsplit("/", 1)[0] + "/", content_hash, 1
+    return stored, content_hash, 0
+
+
 def store_file(
     root: Path, relative_path: str, data: bytes, owner_id: int | None = None
 ) -> tuple[str, bool]:
@@ -283,17 +311,32 @@ def plan_units(root: Path, report: ImportReport) -> list[ImportUnit]:
     return sorted(units, key=lambda u: u.source_path)
 
 
-async def _ocr_cached(source: SourceFile) -> OcrPage:
+async def _ocr_cached(source: SourceFile, engine: OcrEngine, force: bool = False) -> OcrCacheEntry:
+    """Wynik OCR zdjęcia dla danego silnika: z pamięci podręcznej (także z pierwotnej tabeli
+    Tesseracta), a przy `force` albo braku wyniku – rozpoznanie od nowa i zapis."""
+    key = engine.key()
+    if not force:
+        async with session_factory() as session:
+            cached = await session.get(OcrCacheEntry, (source.sha256, key))
+            if cached is not None:
+                return cached
+            legacy = (
+                await session.get(OcrPage, source.sha256) if key == LEGACY_TESSERACT_KEY else None
+            )
+        if legacy is not None:
+            return await _store_ocr(source.sha256, key, legacy.text, legacy.confidence)
+    result = await asyncio.to_thread(engine.read, source.path.read_bytes())
+    return await _store_ocr(source.sha256, key, result.text, result.confidence)
+
+
+async def _store_ocr(sha256: str, engine_key: str, text: str, confidence: float) -> OcrCacheEntry:
     async with session_factory() as session:
-        cached = await session.get(OcrPage, source.sha256)
-        if cached is not None:
-            return cached
-    result = await asyncio.to_thread(ocr_image, source.path.read_bytes())
-    page = OcrPage(sha256=source.sha256, text=result.text, confidence=result.confidence)
-    async with session_factory() as session:
-        page = await session.merge(page)
+        row = await session.merge(
+            OcrCacheEntry(sha256=sha256, engine=engine_key, text=text, confidence=confidence)
+        )
         await session.commit()
-    return page
+        await session.refresh(row)
+        return row
 
 
 def title_from_text(text: str, fallback: str) -> str:
@@ -399,9 +442,13 @@ async def _user_ids() -> set[int]:
 
 
 async def unit_text(
-    unit: ImportUnit, on_page: Callable[[int, int], None] | None = None
+    unit: ImportUnit,
+    on_page: Callable[[int, int], None] | None = None,
+    engine: OcrEngine | None = None,
+    force_ocr: bool = False,
 ) -> tuple[str, str]:
     """Zwraca (tekst, proponowany tytuł) dla pliku lub grupy zdjęć."""
+    engine = engine or get_engine()
     if unit.kind == "file":
         source = unit.files[0]
         text = await asyncio.to_thread(
@@ -411,7 +458,7 @@ async def unit_text(
     pages = []
     total = len(unit.files)
     for number, source in enumerate(unit.files, start=1):
-        page = await _ocr_cached(source)
+        page = await _ocr_cached(source, engine, force_ocr)
         if len(page.text) >= 20:
             pages.append(f"# Strona {number}\n\n{page.text}")
         if on_page:
@@ -429,13 +476,24 @@ async def import_directory(
     dry_run: bool = False,
     progress: ImportProgress | None = None,
     log: Callable[[str], None] | None = None,
+    force: bool = False,
+    force_ocr: bool = False,
+    engine: OcrEngine | None = None,
+    only: set[str] | None = None,
 ) -> ImportReport:
+    """Import katalogu. `force` – przetwarza także niezmienione dokumenty (ponowne przygotowanie),
+    `force_ocr` – OCR od nowa zamiast pamięci podręcznej, `engine` – silnik OCR (domyślny
+    z ustawień), `only` – tylko dokumenty o podanych ścieżkach źródłowych."""
     if not root.is_dir():
         raise FileNotFoundError(f"Katalog {root} nie istnieje (ustaw KB_SOURCE_DIR / wolumen /kb)")
     progress = progress or ImportProgress()
     progress.phase = "scan"
     report = ImportReport()
     units = await asyncio.to_thread(plan_units, root, report)
+    if only is not None:
+        units = [u for u in units if u.source_path in only]
+    report.planned = [u.source_path for u in units]
+    engine = engine or get_engine()
 
     async with session_factory() as session:
         known = {
@@ -456,7 +514,8 @@ async def import_directory(
         # Pomijamy tylko dokumenty zaindeksowane w całości – przerwany import (np. restart przy
         # wdrożeniu) albo błąd indeksowania są ponawiane; OCR stron i tak jest w pamięci podręcznej.
         if (
-            existing is not None
+            not force
+            and existing is not None
             and existing.content_hash == unit.content_hash
             and existing.status == "indexed"
         ):
@@ -476,7 +535,7 @@ async def import_directory(
             continue
         progress.begin(unit)
         try:
-            text, title = await unit_text(unit, progress.on_page)
+            text, title = await unit_text(unit, progress.on_page, engine, force_ocr)
         except Exception as exc:
             logger.warning("Import %s nie powiódł się: %s", unit.source_path, exc)
             report.failed.append(f"{unit.source_path}: {exc}")
@@ -515,6 +574,43 @@ async def import_directory(
     return report
 
 
+async def reprocess(
+    root: Path,
+    *,
+    progress: ImportProgress | None = None,
+    engine_name: str | None = None,
+    force_ocr: bool = True,
+    rebuild_index: bool = False,
+    only: set[str] | None = None,
+) -> ImportReport:
+    """Ponowne przygotowanie dokumentów z oryginałów: OCR wybranym silnikiem (od nowa albo
+    z pamięci podręcznej tego silnika), podział na fragmenty i embedding. `rebuild_index` usuwa
+    cały indeks Qdrant i buduje go od zera (np. po zmianie modelu embeddingów) – wtedy także
+    hasła wbudowane i dokumenty bez oryginału w katalogu (z zapisanego tekstu)."""
+    engine = get_engine(engine_name)
+    progress = progress or ImportProgress()
+    if rebuild_index:
+        progress.phase = "scan"
+        await vector_store.drop_collection()
+        await seed_builtin()
+    report = await import_directory(
+        root, progress=progress, force=True, force_ocr=force_ocr, engine=engine, only=only
+    )
+    if rebuild_index:
+        planned = set(report.planned)
+        async with session_factory() as session:
+            leftovers = [
+                d
+                for d in (await session.exec(select(KbDocument))).all()
+                if d.source_path not in planned
+            ]
+        for doc in leftovers:
+            doc = await index_and_record(doc)
+            if doc.status != "indexed":
+                report.failed.append(f"{doc.title}: {doc.error}")
+    return report
+
+
 @dataclass
 class ImportJob:
     """Stan importu uruchomionego z panelu administratora (jeden naraz, w tle)."""
@@ -527,6 +623,7 @@ class ImportJob:
     failed: list[str] = field(default_factory=list)
     error: str | None = None
     trigger: str = ""  # "panel" | "auto"
+    label: str = ""  # co robi zadanie – pokazywane w panelu
     # Odcisk katalogu z początku ostatniego importu – automat uruchamia import tylko po zmianach.
     imported_fingerprint: str | None = None
     task: asyncio.Task | None = None
@@ -535,26 +632,68 @@ class ImportJob:
 job = ImportJob()
 
 
-def start_background_import(root: Path, trigger: str = "panel") -> bool:
+def _start_job(
+    root: Path,
+    work: Callable[[ImportProgress], Awaitable[ImportReport]],
+    *,
+    trigger: str,
+    label: str,
+) -> bool:
+    """Uruchamia zadanie bazy wiedzy w tle (jedno naraz) z postępem dla panelu."""
     if job.running:
         return False
 
     async def run() -> None:
         try:
             job.imported_fingerprint = await asyncio.to_thread(directory_fingerprint, root)
-            report = await import_directory(root, progress=job.progress)
+            report = await work(job.progress)
             job.summary, job.failed = report.summary(), report.failed
         except Exception as exc:
-            logger.exception("Import katalogu bazy wiedzy nie powiódł się")
+            logger.exception("Zadanie bazy wiedzy nie powiodło się: %s", label)
             job.error = str(exc)
         finally:
             job.running, job.finished_at = False, datetime.now()
 
-    job.running, job.started_at, job.finished_at, job.trigger = True, datetime.now(), None, trigger
+    job.running, job.started_at, job.finished_at = True, datetime.now(), None
+    job.trigger, job.label = trigger, label
     job.progress = ImportProgress()
     job.summary, job.failed, job.error = "", [], None
     job.task = asyncio.create_task(run())
     return True
+
+
+def start_background_import(root: Path, trigger: str = "panel") -> bool:
+    return _start_job(
+        root,
+        lambda progress: import_directory(root, progress=progress),
+        trigger=trigger,
+        label="Synchronizacja katalogu",
+    )
+
+
+def start_background_reprocess(
+    root: Path,
+    *,
+    engine_name: str | None = None,
+    force_ocr: bool = True,
+    rebuild_index: bool = False,
+    only: set[str] | None = None,
+    label: str,
+) -> bool:
+    get_engine(engine_name)  # nieznany silnik → ValueError przed startem zadania
+    return _start_job(
+        root,
+        lambda progress: reprocess(
+            root,
+            progress=progress,
+            engine_name=engine_name,
+            force_ocr=force_ocr,
+            rebuild_index=rebuild_index,
+            only=only,
+        ),
+        trigger="panel",
+        label=label,
+    )
 
 
 def should_auto_import(current: str, previous_check: str | None, imported: str | None) -> bool:

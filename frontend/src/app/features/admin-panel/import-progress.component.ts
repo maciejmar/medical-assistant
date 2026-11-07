@@ -76,6 +76,9 @@ export function humanDuration(seconds: number): string {
   template: `
     @if (visible()) {
       <div class="mt-4 rounded-xl border border-brand-100 bg-gradient-to-br from-brand-50 to-white p-4" role="status" aria-live="polite">
+        @if (status()?.label && !uploading()) {
+          <p class="mb-3 text-sm font-semibold text-slate-700">{{ status()!.label }}</p>
+        }
         <!-- Etapy -->
         <ol class="mb-4 flex items-center gap-1 overflow-x-auto text-xs">
           @for (step of steps; track step.key; let i = $index; let last = $last) {

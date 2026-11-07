@@ -15,7 +15,14 @@ from sqlmodel import col, select
 from ..auth import CurrentAdmin, SessionDep
 from ..config import settings
 from ..database import KbDocument, KbPrivateDocument, User
-from ..kb_import import UnsafePathError, job, start_background_import, store_file
+from ..kb_import import (
+    UnsafePathError,
+    job,
+    start_background_import,
+    start_background_reprocess,
+    store_file,
+    store_single_upload,
+)
 from ..knowledge import (
     ExtractionError,
     document_owners,
@@ -23,7 +30,7 @@ from ..knowledge import (
     index_and_record,
     set_document_owner,
 )
-from ..ocr import OcrUnavailableError
+from ..ocr import ENGINES, OcrUnavailableError, get_engine
 from ..seed_data import DOCUMENTS
 from ..vector_store import vector_store
 from .schemas import (
@@ -31,6 +38,8 @@ from .schemas import (
     KbDocumentPatch,
     KbImportProgressOut,
     KbImportStatusOut,
+    KbOcrEngineOut,
+    KbReprocessIn,
     KbStoredFileOut,
     KnowledgeBaseOut,
 )
@@ -104,6 +113,7 @@ async def upload_document(
     except OcrUnavailableError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
 
+    owner_id = _owner_for(visibility, admin)
     doc = KbDocument(
         title=title.strip(),
         filename=filename,
@@ -115,10 +125,19 @@ async def upload_document(
         text=text,
         uploaded_by=admin.id,
     )
+    root = Path(settings.kb_source_dir)
+    if root.is_dir():
+        # Oryginał w katalogu bazy wiedzy – dokument można potem przetworzyć ponownie (np. innym
+        # silnikiem OCR); import rozpozna go po ścieżce i sumie kontrolnej jako niezmieniony.
+        try:
+            doc.source_path, doc.content_hash, doc.pages = await asyncio.to_thread(
+                store_single_upload, root, filename, data, owner_id
+            )
+        except (OSError, UnsafePathError):
+            pass  # bez oryginału dokument nadal działa (tekst jest w bazie)
     session.add(doc)
     await session.commit()
     await session.refresh(doc)
-    owner_id = _owner_for(visibility, admin)
     await set_document_owner(doc.id, owner_id)  # type: ignore[arg-type]
     return _out(await index_and_record(doc), owner_id)
 
@@ -147,6 +166,9 @@ def _import_status() -> KbImportStatusOut:
         source_dir=settings.kb_source_dir,
         source_available=Path(settings.kb_source_dir).is_dir(),
         running=job.running,
+        label=job.label,
+        ocr_engine=settings.ocr_engine,
+        ocr_engines=[KbOcrEngineOut(name=e.name, label=e.label) for e in ENGINES.values()],
         started_at=job.started_at,
         finished_at=job.finished_at,
         progress=progress,
@@ -205,6 +227,74 @@ async def start_import(admin: CurrentAdmin) -> KbImportStatusOut:
         )
     if not start_background_import(Path(settings.kb_source_dir)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Import już trwa")
+    return _import_status()
+
+
+def _source_root() -> Path:
+    root = Path(settings.kb_source_dir)
+    if not root.is_dir():
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Katalog {settings.kb_source_dir} jest niedostępny – sprawdź wolumen /kb.",
+        )
+    return root
+
+
+def _engine_label(name: str | None) -> str:
+    try:
+        return get_engine(name).label
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+
+@router.post("/reprocess", response_model=KbImportStatusOut, status_code=status.HTTP_202_ACCEPTED)
+async def reprocess_all(body: KbReprocessIn, admin: CurrentAdmin) -> KbImportStatusOut:
+    """Przygotowuje od nowa wszystkie dokumenty z oryginałów: OCR wybranym silnikiem, podział na
+    fragmenty i embedding (opcjonalnie z przebudową całego indeksu). Tytuły i metadane zostają."""
+    root = _source_root()
+    engine = _engine_label(body.engine)
+    label = "Przetwarzanie wszystkich dokumentów od nowa · " + engine
+    if body.rebuild_index:
+        label += " · przebudowa indeksu"
+    started = start_background_reprocess(
+        root,
+        engine_name=body.engine,
+        force_ocr=body.force_ocr,
+        rebuild_index=body.rebuild_index,
+        label=label,
+    )
+    if not started:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Trwa inne zadanie bazy wiedzy")
+    return _import_status()
+
+
+@router.post(
+    "/{document_id}/reprocess",
+    response_model=KbImportStatusOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def reprocess_document(
+    document_id: int, body: KbReprocessIn, session: SessionDep, admin: CurrentAdmin
+) -> KbImportStatusOut:
+    """Przygotowuje od nowa jeden dokument z oryginału (np. próba nowego silnika OCR)."""
+    doc, _ = await _get(session, document_id, admin)
+    if not doc.source_path:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Dokument nie ma oryginału w katalogu (wgrany przed zapisywaniem oryginałów) – "
+            "użyj „Indeksuj ponownie” albo wgraj plik jeszcze raz.",
+        )
+    root = _source_root()
+    engine = _engine_label(body.engine)
+    started = start_background_reprocess(
+        root,
+        engine_name=body.engine,
+        force_ocr=body.force_ocr,
+        only={doc.source_path},
+        label=f"Ponowne przetworzenie: {doc.title} · {engine}",
+    )
+    if not started:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Trwa inne zadanie bazy wiedzy")
     return _import_status()
 
 

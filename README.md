@@ -61,6 +61,10 @@ korzysta z niej wyłącznie w rozmowach tego konta). Pliki prywatne leżą na se
 3. Popraw w panelu tytuły i metadane (kategoria, grupa wiekowa, ICD, słowa kluczowe) – tytuł dokumentu ze zdjęć
    jest brany z pierwszej linii rozpoznanego tekstu. Zmiany zostają przy kolejnych synchronizacjach.
 
+**Przetwarzanie od nowa:** panel → *Baza wiedzy* → „Przetwórz dokumenty od nowa” (wybór silnika OCR, OCR od nowa
+lub z pamięci, opcjonalnie przebudowa całego indeksu – np. po zmianie modelu embeddingów) albo „Przetwórz ponownie”
+przy jednym dokumencie. Źródłem są oryginały w katalogu materiałów; tytuły i metadane zostają.
+
 **OCR zdjęć:** Tesseract (lokalnie w kontenerze, obrazy nie opuszczają serwera), wyłącznie druk – słowa z niską
 pewnością rozpoznania (pismo odręczne) są odrzucane. Obrócone zdjęcia są wykrywane automatycznie. Wynik OCR każdego
 zdjęcia jest zapamiętywany (`kb_ocr_pages`), więc ponowna synchronizacja nie powtarza OCR. Pierwszy import kilkuset
@@ -72,6 +76,97 @@ usuń też plik. Skany PDF bez warstwy tekstowej są odrzucane (zamiast nich uż
 Tekst materiałów jest przechowywany w PostgreSQL (`kb_documents`), więc indeks można odtworzyć:
 `python -m src.seed --force` (lub automatycznie przy starcie na pustym Qdrant) indeksuje ponownie hasła wbudowane
 i wszystkie materiały. Nie umieszczaj w bazie wiedzy materiałów zawierających dane pacjentów.
+
+### Podłączenie nowego silnika OCR (np. modelu wizyjnego)
+
+Silniki OCR są zarejestrowane w `backend/src/ocr.py` (słownik `ENGINES`). Panel, pamięć podręczna OCR i ponowne
+przetwarzanie obsługują każdy zarejestrowany silnik automatycznie – nowy silnik to jedna klasa. Przykład dla modelu
+wizyjnego z API zgodnym z OpenAI (OpenAI, własny vLLM z Qwen2.5-VL itp.), który czyta **druk i pismo odręczne**:
+
+1. **Ustawienia** – w klasie `Settings` (`backend/src/config.py`):
+
+   ```python
+   ocr_vision_base_url: str = "https://api.openai.com/v1"
+   ocr_vision_api_key: str = ""
+   ocr_vision_model: str = "gpt-4.1-mini"
+   ```
+
+2. **Silnik** – w `backend/src/ocr.py` (importy `io`, `Image`, `ImageOps`, `settings` już tam są):
+
+   ```python
+   import base64
+
+   from openai import OpenAI
+
+   VISION_PROMPT = (
+       "Wykonaj wierną transkrypcję strony (polskie materiały logopedyczne). Odczytaj druk i pismo "
+       "odręczne, zachowaj nagłówki, listy i kolejność. Nie streszczaj i nie poprawiaj autora. "
+       "Nieczytelne fragmenty oznacz [nieczytelne], niepewne – [prawdopodobnie: …]. "
+       "Zwróć wyłącznie tekst strony (Markdown)."
+   )
+
+
+   class VisionEngine:
+       name = "vision"
+       label = "Model wizyjny – druk i pismo odręczne"
+       PROMPT_VERSION = "v1"  # zmiana promptu → nowy klucz → nowe odczyty (stare zostają)
+
+       def key(self) -> str:
+           # Klucz obejmuje model i wersję promptu – każda zmiana daje osobne wpisy w pamięci OCR.
+           return f"vision:{settings.ocr_vision_model}:{self.PROMPT_VERSION}"
+
+       def read(self, data: bytes) -> OcrResult:
+           # Wywoływane w osobnym wątku (asyncio.to_thread) – dlatego synchroniczny klient.
+           image = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+           image.thumbnail((2000, 2000))  # mniejszy obraz = niższy koszt, tekst nadal czytelny
+           buffer = io.BytesIO()
+           image.save(buffer, "JPEG", quality=85)
+           url = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode()
+           client = OpenAI(
+               base_url=settings.ocr_vision_base_url,
+               api_key=settings.ocr_vision_api_key,
+               timeout=120,
+           )
+           response = client.chat.completions.create(
+               model=settings.ocr_vision_model,
+               temperature=0,
+               messages=[
+                   {
+                       "role": "user",
+                       "content": [
+                           {"type": "text", "text": VISION_PROMPT},
+                           {"type": "image_url", "image_url": {"url": url, "detail": "high"}},
+                       ],
+                   }
+               ],
+           )
+           text = (response.choices[0].message.content or "").strip()
+           return OcrResult(text=text, confidence=100.0, words=len(text.split()))
+   ```
+
+   i rejestracja:
+
+   ```python
+   ENGINES: dict[str, OcrEngine] = {
+       engine.name: engine for engine in (TesseractEngine(), VisionEngine())
+   }
+   ```
+
+3. **Test** – w `backend/tests/` podstaw klienta (`monkeypatch` na `OpenAI`) i sprawdź, że `get_engine("vision")`
+   zwraca tekst; reszta mechanizmu jest już pokryta testami (`test_kb_reprocess.py`).
+4. **Konfiguracja serwera** – w `/opt/logoped-assist.env`: `OCR_VISION_API_KEY=…` (oraz `OCR_VISION_MODEL`,
+   `OCR_VISION_BASE_URL` dla innego dostawcy). Opcjonalnie `OCR_ENGINE=vision`, żeby nowe materiały
+   (import i pojedyncze zdjęcia) były od razu czytane tym silnikiem. Wdrożenie: commit + push (GitHub Actions);
+   sama zmiana pliku `.env` wymaga `docker compose --env-file /opt/logoped-assist.env up -d backend`.
+5. **Przełączenie bazy** – panel → *Baza wiedzy* → „Przetwórz dokumenty od nowa”: wybierz silnik, najpierw
+   „Przetwórz ponownie” przy jednym dokumencie i porównaj „Podgląd odczytanego tekstu”; jeśli jest lepiej –
+   „Przetwórz wszystkie dokumenty od nowa” z zaznaczonym „OCR zdjęć od nowa”. Odczyty Tesseracta zostają
+   w pamięci podręcznej, więc powrót do niego (bez „OCR od nowa”) trwa kilka minut.
+
+Uwagi: zdjęcia materiałów trafiają do dostawcy modelu (nie wgrywaj materiałów z danymi pacjentów). Wywołania
+silnika nie przechodzą przez `src/llm.py`, więc nie trafiają do statystyk tokenów ani logu LLM – w razie potrzeby
+dopisz tam zapis (`track_usage`). Koszt orientacyjny pełnego OCR ok. 1000 stron sprawdź w cenniku dostawcy przed
+uruchomieniem.
 
 ## Architektura
 

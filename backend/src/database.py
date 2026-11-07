@@ -217,8 +217,22 @@ class KbPrivateDocument(SQLModel, table=True):
     created_at: datetime = _ts()
 
 
+class OcrCacheEntry(SQLModel, table=True):
+    """Pamięć podręczna OCR per silnik: (SHA-256 obrazu, klucz silnika z parametrami).
+    Pozwala porównywać i przełączać silniki bez utraty wcześniejszych odczytów."""
+
+    __tablename__ = "kb_ocr_results"
+
+    sha256: str = Field(primary_key=True, max_length=64)
+    engine: str = Field(primary_key=True, max_length=120)
+    text: str = Field(sa_column=Column(Text, nullable=False))
+    confidence: float = Field(default=0.0)
+    created_at: datetime = _ts()
+
+
 class OcrPage(SQLModel, table=True):
-    """Pamięć podręczna OCR (klucz: SHA-256 obrazu) – każde zdjęcie rozpoznawane jest raz."""
+    """Pierwotna pamięć podręczna OCR (tylko Tesseract, przed wprowadzeniem wyboru silnika) –
+    odczytywana jako wyniki silnika o kluczu LEGACY_TESSERACT_KEY."""
 
     __tablename__ = "kb_ocr_pages"
 

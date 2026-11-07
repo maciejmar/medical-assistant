@@ -7,6 +7,9 @@ function status(progress: Partial<KbImportProgress>, extra: Partial<KbImportStat
     source_dir: '/kb',
     source_available: true,
     running: true,
+    label: 'Synchronizacja katalogu',
+    ocr_engine: 'tesseract',
+    ocr_engines: [{ name: 'tesseract', label: 'Tesseract – lokalnie, tylko druk' }],
     started_at: '2026-10-18T08:00:00Z',
     finished_at: null,
     summary: '',
@@ -56,6 +59,7 @@ describe('ImportProgressComponent', () => {
     expect(text).toContain('dokument 1 z 2');
     expect(text).toContain('Pozostało ok. 7 min');
     expect(text).toContain('bez zmian: 16');
+    expect(text).toContain('Synchronizacja katalogu');
   });
 
   it('podczas wysyłania pokazuje postęp przesyłania plików', () => {

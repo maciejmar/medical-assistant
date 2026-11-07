@@ -38,6 +38,16 @@ async def seed_knowledge_base(force: bool = False) -> int:
         logger.info("Baza wiedzy Qdrant jest już zasilona – pomijam seeding")
         return 0
 
+    inserted = await seed_builtin()
+
+    from .knowledge import reindex_uploaded  # import lokalny: knowledge korzysta z tego modułu
+
+    await reindex_uploaded()
+    return inserted
+
+
+async def seed_builtin() -> int:
+    """Indeksuje hasła wbudowane (seed_data.DOCUMENTS); tworzy kolekcję, jeśli jej nie ma."""
     inserted = 0
     for start in range(0, len(DOCUMENTS), _BATCH):
         batch = DOCUMENTS[start : start + _BATCH]
@@ -68,10 +78,6 @@ async def seed_knowledge_base(force: bool = False) -> int:
         )
         inserted += len(batch)
     logger.info("Zasilono bazę wiedzy: %d dokumentów", inserted)
-
-    from .knowledge import reindex_uploaded  # import lokalny: knowledge korzysta z tego modułu
-
-    await reindex_uploaded()
     return inserted
 
 

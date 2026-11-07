@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     kb_session_gap_minutes: int = 30
     # Automatyczne wykrywanie nowych/zmienionych plików w katalogu (0 = wyłączone).
     kb_scan_interval_seconds: int = 300
+    ocr_engine: str = "tesseract"  # domyślny silnik OCR (src.ocr.ENGINES)
     ocr_languages: str = "pol+eng"
     ocr_min_word_confidence: int = 60
     ocr_max_side_px: int = 2600

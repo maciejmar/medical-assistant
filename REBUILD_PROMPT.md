@@ -5,7 +5,7 @@
 > **Utrzymanie:** każda zmiana funkcjonalności, modelu danych, API, konfiguracji lub wdrożenia musi być
 > odzwierciedlona w odpowiedniej sekcji poniżej oraz dopisana do „Historii zmian” na końcu pliku.
 >
-> Ostatnia aktualizacja: 2026-11-06
+> Ostatnia aktualizacja: 2026-11-07
 
 ---
 
@@ -66,7 +66,8 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `llm_calls` | user_id, operation, model_name, request (JSON – wiadomości **po anonimizacji**), response, status, error, tokeny, duration_ms |
 | `kb_documents` | title, filename, category, audience, icd10, icd11, tags, text (pełny odczytany tekst), chunks, status (`pending`/`indexed`/`error`), error, uploaded_by, source_path (import z katalogu), content_hash, pages, created_at, indexed_at |
 | `kb_private_documents` | document_id (PK → kb_documents), owner_id (→ users) – dokument prywatny; brak wpisu = wiedza wspólna |
-| `kb_ocr_pages` | sha256 (PK obrazu), text, confidence – pamięć podręczna OCR |
+| `kb_ocr_results` | (sha256 obrazu, engine = klucz silnika z parametrami) PK, text, confidence – pamięć podręczna OCR per silnik |
+| `kb_ocr_pages` | sha256, text, confidence – pierwotna pamięć OCR Tesseracta (tylko odczyt; traktowana jak wyniki klucza `tesseract:pol+eng:c60`) |
 
 Usuwanie konta usuwa też jego prywatne materiały bazy wiedzy (wiersze i punkty w Qdrant), a w materiałach
 wspólnych zeruje `uploaded_by`. Usuwanie pacjenta (`purge_patients`) kasuje notatki, zalecenia, powiadomienia i powiązanie konta,
@@ -180,7 +181,13 @@ domyślnie `../laryngolog`, zmienna `KB_SOURCE_HOST_DIR`). Import (`src/kb_impor
 - tytuł dokumentu ze zdjęć = pierwsza sensowna linia OCR; tytuł/metadane ustawione w panelu zostają przy aktualizacji;
 - usunięcie w panelu nie usuwa pliku – dokument wróci przy synchronizacji, jeśli plik nadal jest w katalogu.
 
-**OCR** (`src/ocr.py`): Tesseract `pol+eng`, tylko druk – słowa z pewnością < `OCR_MIN_WORD_CONFIDENCE=60`
+**Silniki OCR** (`src/ocr.py`): rejestr `ENGINES` (protokół `OcrEngine`: `name`, `label`, `key()` – identyfikuje silnik
+razem z parametrami, `read(bytes)`), domyślny z `OCR_ENGINE`. Dziś jeden silnik – Tesseract; kolejny (np. model
+wizyjny – zgodnie z decyzją ma czytać druk i pismo odręczne) = nowa klasa w rejestrze, bez zmian w reszcie systemu. Instrukcja z przykładem
+kodu silnika wizyjnego (API zgodne z OpenAI): README, „Podłączenie nowego silnika OCR”.
+Pamięć podręczna OCR jest per silnik, więc wyniki różnych silników nie nadpisują się.
+
+**Tesseract**: `pol+eng`, tylko druk – słowa z pewnością < `OCR_MIN_WORD_CONFIDENCE=60`
 odrzucane, linia zostaje gdy większość słów jest pewna (pismo odręczne odpada); orientacja: najpierw 0°,
 jeśli pewność < 75 lub < 15 słów – próba 90/270/180° na miniaturze 1600 px i wybór najlepszego; strona
 skalowana do `OCR_MAX_SIDE_PX=2600`; strony zapisane z nagłówkiem `# Strona N`.
@@ -197,6 +204,14 @@ dozwolone rozszerzenia; zapis atomowy przez ukryty plik tymczasowy) → automaty
 ze ścieżek/rozmiarów/mtime; import startuje, gdy katalog różni się od ostatnio zaimportowanego i nie zmienił się
 od poprzedniego sprawdzenia); (3) „Synchronizuj katalog” / `python -m src.kb_import [/kb] [--dry-run]`;
 (4) pojedynczy plik w panelu (zapisywany tylko w bazie, nie w katalogu). Edycja metadanych (PATCH) przeindeksowuje dokument.
+
+**Przetwarzanie od nowa** (oryginały w katalogu są zawsze zachowane): `POST /admin/knowledge/reprocess`
+`{engine, force_ocr, rebuild_index}` – wszystkie dokumenty: OCR wybranym silnikiem (od nowa albo z pamięci tego
+silnika), fragmenty, embedding; tytuły/metadane/widoczność zostają; `rebuild_index` usuwa kolekcję Qdrant,
+indeksuje hasła wbudowane i odtwarza z zapisanego tekstu dokumenty bez oryginału. `POST /{id}/reprocess` – jeden
+dokument (409, gdy brak oryginału). Zadania w tle, jedno naraz (`ImportJob.label` opisuje zadanie w panelu).
+Pojedynczy plik wgrany w panelu zapisuje oryginał w `pojedyncze/<nazwa>-<sha8>/<plik>` (z prefiksem `prywatne/<id>/`),
+z `source_path` i `content_hash` zgodnymi z importem (import traktuje go jako niezmieniony).
 
 **Wskaźnik postępu** (`import-progress` component, odpytywanie co 2 s): etapy Wysyłanie → Skanowanie →
 Odczyt/OCR → Embedding → Gotowe, procent ważony liczbą stron (zdjęcia: 85% OCR / 15% embedding; pliki: 20/80),
@@ -215,7 +230,7 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
 - `audio`: `POST /audio/transcribe`
 - `admin`: `GET /admin/usage?days=`, `GET /admin/stats`, `GET|POST /admin/users`, `PATCH|DELETE /admin/users/{id}`,
   `GET /admin/llm-calls`, `GET /admin/llm-calls/{id}`
-- `admin/knowledge` (pola formularza i PATCH z `visibility`: `shared`/`private`): `GET|POST ""`, `POST /files`, `GET|POST /import`, `PATCH|DELETE /{id}`, `POST /{id}/reindex`
+- `admin/knowledge` (pola formularza i PATCH z `visibility`: `shared`/`private`): `GET|POST ""`, `POST /files`, `GET|POST /import`, `PATCH|DELETE /{id}`, `POST /{id}/reindex`, `POST /reprocess`, `POST /{id}/reprocess`
 - `GET /api/health`
 
 ## 12. Frontend – struktura
@@ -279,6 +294,9 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-07** – Ponowne przetwarzanie dokumentów z oryginałów (cała baza lub jeden dokument): rejestr silników OCR,
+  pamięć OCR per silnik (`kb_ocr_results`, bez utraty starych odczytów), opcja przebudowy indeksu od zera; pojedyncze
+  pliki z panelu zapisują oryginał w katalogu. Aplikacja zmigrowana na serwer 187.126.17.17.
 - **2026-11-06** – Przygotowanie migracji na nowy serwer (187.126.17.17); poprawka healthchecku frontendu (127.0.0.1).
 - **2026-11-06** – Logo aplikacji (okrągła plakietka) zamiast litery „L” w nawigacji i na stronie logowania.
 - **2026-11-06** – Gradienty wykresów wyrazistsze i trzybarwne (z brązem), rozpięte do najwyższej wartości.

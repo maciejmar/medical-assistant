@@ -6,8 +6,8 @@ from pathlib import Path
 
 from sqlmodel import select
 
-from src import kb_import, knowledge, ocr
-from src.database import KbDocument, OcrPage, Role, session_factory
+from src import knowledge, ocr
+from src.database import KbDocument, OcrCacheEntry, Role, session_factory
 from src.kb_import import (
     ImportReport,
     SourceFile,
@@ -123,7 +123,7 @@ async def test_import_is_idempotent_and_reacts_to_changes(tmp_path, fake_index, 
         )
         return OcrResult(text, 90.0, 10)
 
-    monkeypatch.setattr(kb_import, "ocr_image", fake_ocr)
+    monkeypatch.setattr(ocr.TesseractEngine, "read", lambda self, data: fake_ocr(data))
     first = await import_directory(tmp_path)
     assert len(first.created) == 4 and not first.failed, first.failed
     assert len(calls) == 4  # każde unikalne zdjęcie raz
@@ -132,7 +132,7 @@ async def test_import_is_idempotent_and_reacts_to_changes(tmp_path, fake_index, 
         book = (
             await session.exec(select(KbDocument).where(KbDocument.source_path == "book/"))
         ).one()
-        cached = (await session.exec(select(OcrPage))).all()
+        cached = (await session.exec(select(OcrCacheEntry))).all()
     assert book.title == "Rehabilitacja dysfunkcji języka" and book.pages == 2
     assert "# Strona 2" in book.text and book.status == "indexed"
     assert len(cached) == 4
@@ -290,7 +290,9 @@ async def test_import_reports_progress(tmp_path, fake_index, monkeypatch):
 
     _build_tree(tmp_path)
     monkeypatch.setattr(
-        kb_import, "ocr_image", lambda data: OcrResult("Ćwiczenia języka i warg.", 90.0, 4)
+        ocr.TesseractEngine,
+        "read",
+        lambda self, data: OcrResult("Ćwiczenia języka i warg.", 90.0, 4),
     )
     progress = ImportProgress()
     await import_directory(tmp_path, progress=progress)

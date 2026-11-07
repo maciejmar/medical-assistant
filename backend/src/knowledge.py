@@ -21,7 +21,7 @@ from sqlmodel import col, select
 from .config import settings
 from .database import KbDocument, KbPrivateDocument, session_factory, utcnow
 from .llm import embed
-from .ocr import IMAGE_EXTENSIONS, ocr_image
+from .ocr import IMAGE_EXTENSIONS, get_engine
 from .seed import document_id, embedding_text
 from .vector_store import OWNER_FIELD, vector_store
 
@@ -95,7 +95,7 @@ def _odt_text(data: bytes) -> str:
 
 
 def _image_text(data: bytes) -> str:
-    result = ocr_image(data)
+    result = get_engine().read(data)
     if len(result.text) < 20:
         raise ExtractionError("Na zdjęciu nie rozpoznano drukowanego tekstu.")
     return result.text
