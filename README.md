@@ -28,7 +28,7 @@ docker compose up --build
   system wraca do kolejności z wyszukiwania hybrydowego (RRF).
 - Nagrywanie mikrofonu działa tylko na `localhost` lub przez HTTPS (wymóg przeglądarek).
 
-## Baza wiedzy RAG – dodawanie materiałów
+## Baza wiedzy RAG – dodawanie materiałów ----
 
 Źródła wiedzy asystenta (wszystkie trafiają do Qdrant i są cytowane w odpowiedziach):
 
