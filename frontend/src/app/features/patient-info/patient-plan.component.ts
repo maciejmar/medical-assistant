@@ -18,16 +18,16 @@ interface StatusStyle {
   icon: IconName;
   /** Kolor ikony i etykiety statusu. */
   tone: string;
-  /** Pastelowe tło, ramka i akcent (lewa krawędź) karty kroku – odcina kartę od białej sekcji. */
-  card: string;
+  /** Akcent (lewa krawędź) karty kroku – tło kart jest wspólne, lekko beżowe. */
+  accent: string;
 }
 
 /** Statusy kroków: kolor zawsze z ikoną i etykietą (nigdy sam kolor). */
 export const PLAN_STATUSES: Record<PlanStatus, StatusStyle> = {
-  planned: { label: 'Zaplanowany', icon: 'circle', tone: 'text-sky-700', card: 'bg-sky-50 border-sky-200 border-l-sky-400' },
-  completed: { label: 'Zakończony', icon: 'check-circle', tone: 'text-emerald-700', card: 'bg-emerald-50 border-emerald-200 border-l-emerald-500' },
-  suspended: { label: 'Zawieszony', icon: 'pause-circle', tone: 'text-amber-700', card: 'bg-amber-50 border-amber-200 border-l-amber-500' },
-  infeasible: { label: 'Niewykonalny', icon: 'x-circle', tone: 'text-red-700', card: 'bg-rose-50 border-rose-200 border-l-red-500' },
+  planned: { label: 'Zaplanowany', icon: 'circle', tone: 'text-sky-700', accent: 'border-l-sky-400' },
+  completed: { label: 'Zakończony', icon: 'check-circle', tone: 'text-emerald-700', accent: 'border-l-emerald-500' },
+  suspended: { label: 'Zawieszony', icon: 'pause-circle', tone: 'text-amber-700', accent: 'border-l-amber-500' },
+  infeasible: { label: 'Niewykonalny', icon: 'x-circle', tone: 'text-red-700', accent: 'border-l-red-500' },
 };
 
 const STATUS_ORDER: PlanStatus[] = ['planned', 'completed', 'suspended', 'infeasible'];
@@ -77,8 +77,8 @@ function apiError(err: unknown, fallback: string): string {
             <li class="flex shrink-0 items-center">
               <button
                 type="button"
-                class="flex h-full min-h-[7.5rem] w-48 flex-col rounded-xl border border-l-4 p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md hover:brightness-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                [class]="status(step.status).card"
+                class="flex h-full min-h-[7.5rem] w-48 flex-col rounded-xl border border-l-4 border-[#dccbad] bg-[#f3e8d4] p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md hover:brightness-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                [class]="status(step.status).accent"
                 (click)="openStep(step)"
                 [attr.aria-label]="'Krok ' + (i + 1) + ': ' + step.title + ', status: ' + status(step.status).label + '. Otwórz szczegóły'"
               >

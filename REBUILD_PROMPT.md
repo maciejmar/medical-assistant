@@ -159,8 +159,8 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
 - **Plan działania** (komponent `patient-plan`, między wywiadem a zaleceniami): poziomy diagram (`<ol>` z przewijaniem
   w poziomie) kart-kroków 192 px: „Krok N”, nazwa (max 3 linie), status z ikoną i etykietą (kolor nigdy sam):
   zaplanowany (`circle`, szary – domyślny dla nowego kroku), zakończony (`check-circle`, zielony), zawieszony
-  (`pause-circle`, bursztynowy), niewykonalny (`x-circle`, czerwony); karta ma pastelowe tło i ramkę w kolorze statusu (sky/emerald/amber/rose-50, ramka -200, lewa krawędź 4 px
-w mocniejszym odcieniu) – nie zlewa się z białą sekcją; karta „+” na tle slate-50; między kartami
+  (`pause-circle`, bursztynowy), niewykonalny (`x-circle`, czerwony); karty mają wspólne lekko beżowe tło `#f3e8d4` z ramką `#dccbad` (nie zlewają się z białą sekcją), a lewa
+krawędź 4 px ma kolor statusu (sky-400/emerald/amber/red-500); karta „+” na tle slate-50; między kartami
   szewron, na końcu pusta karta z przerywaną ramką i „+” = nowy krok. Kliknięcie karty otwiera natywny `<dialog>`
   (`showModal`, Esc zamyka, tło przyciemnione): nazwa, status (4 przyciski), opis; „Usuń krok” (z potwierdzeniem),
   strzałki zmiany kolejności (`PUT …/plan/order` – pełna lista id), „Zapisz”/„Dodaj krok”. Przełącznik
@@ -348,7 +348,7 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
-- **2026-11-07** – Pastelowe tła kart kroków planu w kolorze statusu (białe karty zlewały się z tłem sekcji).
+- **2026-11-07** – Karty kroków planu na lekko beżowym tle (białe zlewały się z sekcją); status – kolor lewej krawędzi i ikona.
 - **2026-11-07** – Blok „Plan działania” w karcie pacjenta: diagram kart-kroków ze statusami (zakończony / zawieszony /
   niewykonalny, nowy = zaplanowany), okno edycji z opisem, zmianą nazwy, kolejności i usuwaniem; opcjonalnie w kontekście LLM.
 - **2026-11-07** – Ikony Bootstrap Icons (inline SVG, komponent `app-icon`) zamiast emoji: odsłuch, nagrywanie, stop/pauza, usuwanie, dodawanie, zatwierdzanie.
