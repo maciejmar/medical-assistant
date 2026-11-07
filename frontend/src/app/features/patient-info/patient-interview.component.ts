@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { AudioRecordingService } from '../../core/audio-recording.service';
 import { Interview, InterviewEntry, InterviewItem, InterviewService } from '../../core/interview.service';
+import { IconComponent } from '../../shared/icon.component';
 
 function apiError(err: unknown, fallback: string): string {
   if (err instanceof HttpErrorResponse && typeof err.error?.detail === 'string') {
@@ -31,15 +32,15 @@ export function mergeTranscript(answer: string, transcript: string): string {
 }
 
 /**
- * Wywiad pacjenta: tabela pytanie – odpowiedź. Odpowiedź lekarz wpisuje albo nagrywa (🎙️) –
- * nagranie jest zapisywane przy pytaniu (🔊 odsłuch), a jego transkrypcja doklejana do pola
+ * Wywiad pacjenta: tabela pytanie – odpowiedź. Odpowiedź lekarz wpisuje albo nagrywa (mikrofon) –
+ * nagranie jest zapisywane przy pytaniu (głośnik = odsłuch), a jego transkrypcja doklejana do pola
  * odpowiedzi do poprawienia. „Zatwierdź” zapisuje wszystko i od tej chwili ta wersja trafia
  * do kontekstu asystenta.
  */
 @Component({
   selector: 'app-patient-interview',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, IconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="card mt-6" aria-labelledby="interview-heading">
@@ -49,7 +50,7 @@ export function mergeTranscript(answer: string, transcript: string): string {
           @if (dirty()) {
             <span class="badge bg-amber-100 text-amber-800">Niezapisane zmiany</span>
           } @else if (iv.status === 'approved') {
-            <span class="badge bg-emerald-100 text-emerald-800">✓ Zatwierdzony {{ iv.approved_at | date: 'dd.MM.yyyy HH:mm' }}</span>
+            <span class="badge bg-emerald-100 text-emerald-800"><app-icon name="check" [size]="12" class="mr-1" /> Zatwierdzony {{ iv.approved_at | date: 'dd.MM.yyyy HH:mm' }}</span>
           } @else if (iv.approved_at) {
             <span class="badge bg-amber-100 text-amber-800">Zmiany po zatwierdzeniu {{ iv.approved_at | date: 'dd.MM.yyyy' }} – czekają na zatwierdzenie</span>
           } @else {
@@ -58,7 +59,7 @@ export function mergeTranscript(answer: string, transcript: string): string {
         }
       </div>
       <p class="mb-4 text-xs text-slate-500">
-        Odpowiedź wpisz albo nagraj (🎙️) – nagranie zostaje zapisane przy pytaniu (🔊 odsłuch), a transkrypcja trafia
+        Odpowiedź wpisz albo nagraj mikrofonem – nagranie zostaje zapisane przy pytaniu (przycisk głośnika odtwarza je), a transkrypcja trafia
         do pola odpowiedzi do poprawienia. Asystent uwzględnia wyłącznie <strong>zatwierdzoną</strong> wersję wywiadu.
       </p>
 
@@ -85,23 +86,34 @@ export function mergeTranscript(answer: string, transcript: string): string {
                 <tr class="block border-t border-slate-200 first:border-t-0 md:table-row">
                   <td class="block px-3 pb-1 pt-3 align-top md:table-cell md:py-3">
                     <p class="font-medium text-slate-800">{{ i + 1 }}. {{ item.question }}</p>
-                    <div class="mt-2 flex flex-wrap items-center gap-1">
+                    <div class="mt-2 flex flex-wrap items-center gap-1.5">
                       @if (recordingId() === item.id) {
-                        <button type="button" class="btn-secondary !px-2 !py-1 text-xs text-red-700" (click)="stopRecording(item)" [attr.aria-label]="'Zakończ nagrywanie odpowiedzi na pytanie ' + (i + 1)">
-                          ⏹ {{ recorder.elapsedSeconds() }} s
+                        <button type="button" class="inline-flex h-8 items-center gap-1.5 rounded-full bg-red-600 pl-2.5 pr-3 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700" (click)="stopRecording(item)" [attr.aria-label]="'Zakończ nagrywanie odpowiedzi na pytanie ' + (i + 1)" title="Zakończ nagrywanie">
+                          <span class="h-2 w-2 animate-pulse rounded-full bg-white" aria-hidden="true"></span>
+                          <app-icon name="stop" [size]="14" />
+                          <span class="tabular-nums">{{ recorder.elapsedSeconds() }} s</span>
                         </button>
                       } @else if (uploadingId() === item.id) {
-                        <span class="px-2 py-1 text-xs text-slate-500">Transkrypcja…</span>
+                        <span class="inline-flex h-8 items-center gap-2 px-2 text-xs text-slate-500" role="status">
+                          <span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" aria-hidden="true"></span>
+                          Transkrypcja…
+                        </span>
                       } @else {
-                        <button type="button" class="btn-secondary !px-2 !py-1 text-xs" [disabled]="recordingId() !== null || uploadingId() !== null" (click)="startRecording(item)" [attr.aria-label]="'Nagraj odpowiedź na pytanie ' + (i + 1)" title="Nagraj odpowiedź pacjenta">🎙️</button>
+                        <button type="button" class="grid h-8 w-8 place-items-center rounded-full border border-slate-300 bg-white text-slate-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" [disabled]="recordingId() !== null || uploadingId() !== null" (click)="startRecording(item)" [attr.aria-label]="'Nagraj odpowiedź na pytanie ' + (i + 1)" title="Nagraj odpowiedź pacjenta">
+                          <app-icon name="mic" />
+                        </button>
                       }
                       @if (item.has_audio) {
-                        <button type="button" class="btn-secondary !px-2 !py-1 text-xs" [class.!bg-brand-50]="playingId() === item.id" (click)="togglePlayback(item)" [attr.aria-label]="(playingId() === item.id ? 'Zatrzymaj odsłuch' : 'Odsłuchaj odpowiedź pacjenta') + ' – pytanie ' + (i + 1)" title="Odsłuchaj nagraną odpowiedź">
-                          {{ playingId() === item.id ? '⏸' : '🔊' }}
+                        <button type="button" class="grid h-8 w-8 place-items-center rounded-full transition" [class]="playingId() === item.id ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-brand-50 text-brand-700 hover:bg-brand-100'" (click)="togglePlayback(item)" [attr.aria-label]="(playingId() === item.id ? 'Zatrzymaj odsłuch' : 'Odsłuchaj odpowiedź pacjenta') + ' – pytanie ' + (i + 1)" [attr.aria-pressed]="playingId() === item.id" [title]="playingId() === item.id ? 'Zatrzymaj odsłuch' : 'Odsłuchaj nagraną odpowiedź'">
+                          <app-icon [name]="playingId() === item.id ? 'pause' : 'volume-up'" />
                         </button>
-                        <button type="button" class="btn-secondary !px-2 !py-1 text-xs" (click)="deleteRecording(item)" [attr.aria-label]="'Usuń nagranie – pytanie ' + (i + 1)" title="Usuń nagranie">🗑️ nagranie</button>
+                        <button type="button" class="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600" (click)="deleteRecording(item)" [attr.aria-label]="'Usuń nagranie – pytanie ' + (i + 1)" title="Usuń nagranie">
+                          <app-icon name="trash" [size]="14" />
+                        </button>
                       }
-                      <button type="button" class="ml-auto rounded px-2 py-1 text-xs text-slate-400 hover:bg-red-50 hover:text-red-700" (click)="removeQuestion(item)" [attr.aria-label]="'Usuń pytanie ' + (i + 1)" title="Usuń pytanie">Usuń pytanie</button>
+                      <button type="button" class="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-slate-400 transition hover:bg-red-50 hover:text-red-700" (click)="removeQuestion(item)" [attr.aria-label]="'Usuń pytanie ' + (i + 1)" title="Usuń pytanie">
+                        <app-icon name="trash" [size]="12" /> Usuń pytanie
+                      </button>
                     </div>
                   </td>
                   <td class="block px-3 pb-3 pt-1 md:table-cell md:py-3">
@@ -129,7 +141,7 @@ export function mergeTranscript(answer: string, transcript: string): string {
             aria-label="Treść nowego pytania"
             maxlength="2000"
           />
-          <button type="submit" class="btn-secondary" [disabled]="busy() || !newQuestion().trim()">+ Dodaj pytanie</button>
+          <button type="submit" class="btn-secondary" [disabled]="busy() || !newQuestion().trim()"><app-icon name="plus" /> Dodaj pytanie</button>
         </form>
 
         <div class="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 pt-4">
@@ -137,7 +149,7 @@ export function mergeTranscript(answer: string, transcript: string): string {
             <span class="mr-auto text-sm text-emerald-700" role="status">{{ m }}</span>
           }
           <button type="button" class="btn-secondary" [disabled]="busy() || !dirty()" (click)="save()">Zapisz szkic</button>
-          <button type="button" class="btn-primary" [disabled]="busy() || recordingId() !== null || uploadingId() !== null" (click)="approve()">Zatwierdź</button>
+          <button type="button" class="btn-primary" [disabled]="busy() || recordingId() !== null || uploadingId() !== null" (click)="approve()"><app-icon name="check" /> Zatwierdź</button>
         </div>
       }
     </section>

@@ -133,7 +133,7 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
   Logo Webaby (64 px, w stopce 36 px) także po prawej stronie paska nawigacji, jako link do webaby.io.
 - **Karta pacjenta** – edycja danych, nowa notatka (wpisywana lub **dyktowana**: `MediaRecorder` →
   `POST /api/audio/transcribe` → Whisper, język `pl`, limit 25 MB, dozwolone formaty audio), lista notatek;
-  każda notatka ma przycisk 🗣️ „Odsłuchaj” (⏹️ zatrzymuje) – odczyt syntezatorem przeglądarki (Web Speech API,
+  każda notatka ma okrągły przycisk z ikoną głośnika „Odsłuchaj” (w trakcie odczytu ikona stop na wypełnionym tle) – odczyt syntezatorem przeglądarki (Web Speech API,
   `core/speech.service.ts`), polski głos lokalny systemu preferowany (np. Paulina w Windows; głosy sieciowe wysyłają
   tekst na zewnątrz), tekst dzielony na zdania ≤ 200 znaków (Chrome przerywa długie wypowiedzi); bez backendu. Odporność na błędy
   Chrome: fragmenty odtwarzane po kolei (następny w `onend` poprzedniego), bieżąca wypowiedź trzymana w polu (GC),
@@ -143,10 +143,10 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
 - **Wywiad pacjenta** (komponent `patient-interview`, w `patient-care` przed „Zalecenia i wskazania do leczenia”):
   tabela Pytanie | Odpowiedź. Przy pierwszym otwarciu (`GET /api/patients/{id}/interview`) wywiad jest zakładany
   z bieżącego szablonu (zmiana szablonu nie rusza istniejących wywiadów); lekarz dodaje własne pytania i usuwa zbędne.
-  Przy pytaniu: 🎙️ nagranie odpowiedzi pacjenta w gabinecie (`AudioRecordingService` → `PUT …/items/{iid}/audio`) –
+  Przy pytaniu: ikona mikrofonu – nagranie odpowiedzi pacjenta w gabinecie (`AudioRecordingService` → `PUT …/items/{iid}/audio`) –
   serwer zapisuje nagranie (zastępuje poprzednie) i zwraca transkrypcję Whisper (`pl`), którą frontend **dokleja** do pola
   odpowiedzi (`mergeTranscript`; serwer odpowiedzi nie nadpisuje; przy błędzie transkrypcji nagranie i tak zostaje),
-  🔊 odsłuch nagrania (blob przez HttpClient z JWT → `Audio`), usuwanie nagrania. „Zapisz szkic” (`PUT …/interview`)
+  ikona głośnika – odsłuch nagrania (w trakcie: pauza) (blob przez HttpClient z JWT → `Audio`), usuwanie nagrania. „Zapisz szkic” (`PUT …/interview`)
   i „Zatwierdź” (`POST …/interview/approve`) – zatwierdzenie zapisuje migawkę `approved_items`. Status `approved` tylko,
   gdy treść = migawka (poprawka po zatwierdzeniu → `draft`, cofnięcie → znów `approved`); znacznik „Niezapisane zmiany”.
   **Do LLM trafia wyłącznie zatwierdzona migawka**: `describe_patient(patient, interview)` dopisuje sekcję
@@ -276,7 +276,10 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
 `features/` (auth, dashboard, patient-info + patient-care + patient-interview, chat, admin-panel + llm-logs + knowledge-base +
 import-progress + interview-template, patient-portal), `shared/` (modele, navbar, utils). Trasy ładowane leniwie; `homeRoute()`:
 admin → `/admin`, pacjent → `/patient`, lekarz → `/dashboard`. Logo: `assets/images/logopedic-logo-384.png` (zmniejszona, docięta do koła kopia `logopedic-logo.png`, białe tło),
-wyświetlane jako okrągła plakietka (`rounded-full bg-white`) – 120 px w pasku nawigacji, 192 px na stronie logowania; obok logo w nawigacji nazwa w dwóch liniach: „Logoped” (text-2xl, pogrubione)
+Ikony: `shared/icon.component.ts` (`<app-icon name="…" [size]>`) – ścieżki SVG z Bootstrap Icons 1.11.3
+(MIT) wklejone inline (volume-up, mic, stop, pause, trash, plus, check), `currentColor`, `aria-hidden` – opis daje przycisk;
+nowe ikony kopiuj z `icons/<nazwa>.svg` paczki bootstrap-icons. Emoji nie używamy jako ikon przycisków.
+Logo wyświetlane jako okrągła plakietka (`rounded-full bg-white`) – 120 px w pasku nawigacji, 192 px na stronie logowania; obok logo w nawigacji nazwa w dwóch liniach: „Logoped” (text-2xl, pogrubione)
 i pod nim „Assistant” (text-sm).
 Kolory marki: `brand-50…900` (teal, `#237d75`
 jako 600); tło `body` – gradient `#c8e4dd → #1f052e`; karty dashboardu/asystenta półprzezroczyste z gradientem.
@@ -330,6 +333,7 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-07** – Ikony Bootstrap Icons (inline SVG, komponent `app-icon`) zamiast emoji: odsłuch, nagrywanie, stop/pauza, usuwanie, dodawanie, zatwierdzanie.
 - **2026-11-07** – Sekcja „Wywiad pacjenta” przed zaleceniami: szablon pytań (edycja w panelu admina) + własne pytania,
   nagrania odpowiedzi w gabinecie z transkrypcją Whisper i odsłuchem, ręczna edycja, „Zatwierdź”; zatwierdzony wywiad
   dołączany do kontekstu pacjenta w czacie RAG.

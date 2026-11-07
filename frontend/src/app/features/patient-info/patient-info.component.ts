@@ -47,12 +47,13 @@ export function toExchanges(messages: PatientChatMessage[]): PromptExchange[] {
   return exchanges.reverse();
 }
 import { ageFromBirthDate, emptyToNull, formatDuration } from '../../shared/utils';
+import { IconComponent } from '../../shared/icon.component';
 import { PatientCareComponent } from './patient-care.component';
 
 @Component({
   selector: 'app-patient-info',
   standalone: true,
-  imports: [ReactiveFormsModule, FormsModule, RouterLink, DatePipe, PatientCareComponent],
+  imports: [ReactiveFormsModule, FormsModule, RouterLink, DatePipe, IconComponent, PatientCareComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <a routerLink="/dashboard" class="mb-4 inline-block text-sm text-brand-700 hover:underline">← Wróć do pacjentów</a>
@@ -122,7 +123,7 @@ import { PatientCareComponent } from './patient-care.component';
               } @else if (recorder.state() === 'processing') {
                 <span class="animate-pulse text-sm text-slate-600">Transkrypcja nagrania…</span>
               } @else {
-                <button type="button" class="btn-primary" (click)="recorder.start()" [disabled]="!recorder.isSupported">🎙 Dyktuj notatkę</button>
+                <button type="button" class="btn-primary" (click)="recorder.start()" [disabled]="!recorder.isSupported"><app-icon name="mic" /> Dyktuj notatkę</button>
                 @if (!recorder.isSupported) {
                   <span class="text-xs text-slate-500">Nagrywanie wymaga nowoczesnej przeglądarki i połączenia HTTPS.</span>
                 }
@@ -203,14 +204,15 @@ import { PatientCareComponent } from './patient-care.component';
                   @if (speech.isSupported) {
                     <button
                       type="button"
-                      class="grid h-8 w-8 place-items-center rounded-full text-lg leading-none transition hover:bg-brand-50"
-                      [class.animate-pulse]="speech.speakingId() === 'note-' + n.id"
-                      [class.bg-brand-50]="speech.speakingId() === 'note-' + n.id"
+                      class="grid h-8 w-8 place-items-center rounded-full transition"
+                      [class]="speech.speakingId() === 'note-' + n.id ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-brand-50 text-brand-700 hover:bg-brand-100'"
                       [attr.aria-label]="speech.speakingId() === 'note-' + n.id ? 'Zatrzymaj odczyt notatki' : 'Odsłuchaj notatkę'"
                       [attr.aria-pressed]="speech.speakingId() === 'note-' + n.id"
                       [title]="speech.speakingId() === 'note-' + n.id ? 'Zatrzymaj odczyt' : 'Odsłuchaj notatkę'"
                       (click)="speech.toggle('note-' + n.id, n.content)"
-                    >{{ speech.speakingId() === 'note-' + n.id ? '⏹️' : '🗣️' }}</button>
+                    >
+                      <app-icon [name]="speech.speakingId() === 'note-' + n.id ? 'stop' : 'volume-up'" />
+                    </button>
                   }
                   <button type="button" class="text-slate-400 hover:text-red-600" (click)="removeNote(n)">Usuń</button>
                 </span>
