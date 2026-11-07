@@ -216,6 +216,33 @@ class InterviewAudio(SQLModel, table=True):
     created_at: datetime = _ts()
 
 
+class PatientPlan(SQLModel, table=True):
+    """Ustawienia planu działania pacjenta (brak wiersza = plan nie trafia do kontekstu LLM)."""
+
+    __tablename__ = "patient_plans"
+
+    patient_id: int = Field(sa_column=Column(Integer, ForeignKey("patients.id"), primary_key=True))
+    include_in_context: bool = Field(default=False)
+    updated_at: datetime = _ts()
+
+
+class PlanStep(SQLModel, table=True):
+    """Krok planu działania: status `planned` | `completed` | `suspended` | `infeasible`."""
+
+    __tablename__ = "patient_plan_steps"
+
+    id: int | None = Field(default=None, primary_key=True)
+    patient_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
+    )
+    position: int = Field(default=0)
+    title: str = Field(max_length=200)
+    description: str = Field(default="", sa_column=Column(Text, nullable=False))
+    status: str = Field(default="planned", max_length=20)
+    created_at: datetime = _ts()
+    updated_at: datetime = _ts()
+
+
 class LlmCall(SQLModel, table=True):
     """Pełny zapis żądania wysłanego do LLM i otrzymanej odpowiedzi (wgląd dla administratora)."""
 

@@ -18,6 +18,7 @@ from ..config import settings
 from ..database import ChatMessage, Patient, User, session_factory
 from ..graph import rag_graph
 from .interview import approved_interview
+from .plan import plan_for_context
 from .schemas import ChatIn, ChatMessageOut, ConversationOut
 
 logger = logging.getLogger(__name__)
@@ -38,10 +39,15 @@ def format_age(birth_date: date, today: date) -> str:
     return f"{years} lat {rest} mies. ({years};{rest})"
 
 
-def describe_patient(patient: Patient, interview: list[dict[str, str]] | None = None) -> str:
+def describe_patient(
+    patient: Patient,
+    interview: list[dict[str, str]] | None = None,
+    plan: list[dict[str, str]] | None = None,
+) -> str:
     """Pełny kontekst kliniczny dla LLM – bez imienia i nazwiska pacjenta.
 
     `interview` – zatwierdzone pary pytanie–odpowiedź z wywiadu (dołączane w całości).
+    `plan` – kroki planu działania (tylko gdy lekarz włączył je do kontekstu).
 
     Opis przekazywany jest w całości; ewentualne dane identyfikujące wpisane w nim przez lekarza
     (PESEL, telefon, adres, imiona i nazwiska pacjentów) usuwa anonimizator w src.llm.
@@ -61,6 +67,12 @@ def describe_patient(patient: Patient, interview: list[dict[str, str]] | None = 
     if interview:
         lines.append("Wywiad z pacjentem / opiekunem (zatwierdzony przez lekarza):")
         lines.extend(f"- {e['question']}\n  Odpowiedź: {e['answer']}" for e in interview)
+    if plan:
+        lines.append("Plan działania (kolejne kroki terapii):")
+        for number, step in enumerate(plan, start=1):
+            lines.append(f"{number}. {step['title']} – status: {step['status']}")
+            if step["description"]:
+                lines.append(f"   {step['description']}")
     return "\n".join(lines)
 
 
@@ -93,7 +105,8 @@ async def chat(body: ChatIn, session: SessionDep, doctor: CurrentDoctor) -> Stre
         if patient is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie znaleziono pacjenta")
         interview = await approved_interview(session, patient.id)  # type: ignore[arg-type]
-        patient_context = describe_patient(patient, interview) or None
+        plan = await plan_for_context(session, patient.id)  # type: ignore[arg-type]
+        patient_context = describe_patient(patient, interview, plan) or None
 
     conversation_id = body.conversation_id or str(uuid.uuid4())
     previous = await _owned_conversation_messages(session, doctor, conversation_id)

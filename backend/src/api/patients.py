@@ -14,6 +14,8 @@ from ..database import (
     PatientInterview,
     PatientNote,
     PatientNotification,
+    PatientPlan,
+    PlanStep,
     Recommendation,
     utcnow,
 )
@@ -48,6 +50,8 @@ async def purge_patients(session: SessionDep, patient_ids: list[int]) -> None:
         InterviewAudio,
         InterviewItem,
         PatientInterview,
+        PlanStep,
+        PatientPlan,
         PatientNote,
         Recommendation,
         PatientNotification,

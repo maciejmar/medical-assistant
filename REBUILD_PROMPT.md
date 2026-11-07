@@ -67,6 +67,8 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `patient_interviews` | patient_id (PK), user_id, status (`draft`/`approved`), approved_items (JSON – migawka [{question, answer}] z chwili zatwierdzenia), approved_at |
 | `patient_interview_items` | patient_id, position, question, answer, created_at, updated_at |
 | `patient_interview_audio` | item_id (PK → items), patient_id, content_type, data (LargeBinary – nagranie w bazie, bez wolumenu), size |
+| `patient_plans` | patient_id (PK), include_in_context (bool, domyślnie false), updated_at |
+| `patient_plan_steps` | patient_id, position, title (≤200), description, status (`planned`/`completed`/`suspended`/`infeasible`), created_at, updated_at |
 | `llm_calls` | user_id, operation, model_name, request (JSON – wiadomości **po anonimizacji**), response, status, error, tokeny, duration_ms |
 | `kb_documents` | title, filename, category, audience, icd10, icd11, tags, text (pełny odczytany tekst), chunks, status (`pending`/`indexed`/`error`), error, uploaded_by, source_path (import z katalogu), content_hash, pages, created_at, indexed_at |
 | `kb_private_documents` | document_id (PK → kb_documents), owner_id (→ users) – dokument prywatny; brak wpisu = wiedza wspólna |
@@ -74,7 +76,7 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `kb_ocr_pages` | sha256, text, confidence – pierwotna pamięć OCR Tesseracta (tylko odczyt; traktowana jak wyniki klucza `tesseract:pol+eng:c60`) |
 
 Usuwanie konta usuwa też jego prywatne materiały bazy wiedzy (wiersze i punkty w Qdrant), a w materiałach
-wspólnych zeruje `uploaded_by`. Usuwanie pacjenta (`purge_patients`) kasuje wywiad (nagrania, pytania, stan), notatki, zalecenia, powiadomienia i powiązanie konta,
+wspólnych zeruje `uploaded_by`. Usuwanie pacjenta (`purge_patients`) kasuje wywiad (nagrania, pytania, stan), plan działania (kroki, ustawienia), notatki, zalecenia, powiadomienia i powiązanie konta,
 a w `chat_history` zeruje `patient_id`. Usuwanie użytkownika robi to dla wszystkich jego pacjentów
 i zeruje `user_id` w `token_usage` i `llm_calls`.
 
@@ -154,6 +156,15 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
   z odpowiedzią), dzięki czemu wywiad trafia też do kroku przepisywania zapytania; `ANSWER_SYSTEM` każe odnosić
   zalecenia do wywiadu i cytować fakty o pacjencie jako „(wywiad)”/„(opis pacjenta)”, nie numerem źródła.
   Anonimizacja jak dla reszty kontekstu (centralnie w `src/llm.py`).
+- **Plan działania** (komponent `patient-plan`, między wywiadem a zaleceniami): poziomy diagram (`<ol>` z przewijaniem
+  w poziomie) kart-kroków 192 px: „Krok N”, nazwa (max 3 linie), status z ikoną i etykietą (kolor nigdy sam):
+  zaplanowany (`circle`, szary – domyślny dla nowego kroku), zakończony (`check-circle`, zielony), zawieszony
+  (`pause-circle`, bursztynowy), niewykonalny (`x-circle`, czerwony); lewa krawędź karty w kolorze statusu, między kartami
+  szewron, na końcu pusta karta z przerywaną ramką i „+” = nowy krok. Kliknięcie karty otwiera natywny `<dialog>`
+  (`showModal`, Esc zamyka, tło przyciemnione): nazwa, status (4 przyciski), opis; „Usuń krok” (z potwierdzeniem),
+  strzałki zmiany kolejności (`PUT …/plan/order` – pełna lista id), „Zapisz”/„Dodaj krok”. Przełącznik
+  „Uwzględniaj plan w odpowiedziach asystenta” (`PUT …/plan/settings`) – gdy włączony, `describe_patient` dopisuje
+  „Plan działania (kolejne kroki terapii):” z listą `N. nazwa – status: …` i opisem (`plan_for_context`).
 - **Konto pacjenta, zalecenia, powiadomienia** (komponent `patient-care`): utworzenie/powiązanie konta pacjenta
   (`PUT /api/patients/{id}/account` – istniejące konto musi mieć `ROLE_PATIENT` i nie być powiązane z inną kartą;
   nowe wymaga hasła), odłączenie; CRUD zaleceń z opcją „powiadom e-mailem”; wysyłka powiadomień e-mail
@@ -257,6 +268,8 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
   `GET|POST /patients/{id}/notes`, `DELETE /patients/{id}/notes/{note_id}`, `GET /patients/{id}/chat-history`,
   `GET|PUT|DELETE /patients/{id}/account`, `GET|POST /patients/{id}/recommendations`,
   `PUT|DELETE /patients/{id}/recommendations/{rid}`, `GET|POST /patients/{id}/notifications`
+- `plan`: `GET /patients/{id}/plan`, `PUT /patients/{id}/plan/settings`, `POST /patients/{id}/plan/steps`,
+  `PUT|DELETE /patients/{id}/plan/steps/{sid}`, `PUT /patients/{id}/plan/order`
 - `interview`: `GET|PUT /patients/{id}/interview`, `POST /patients/{id}/interview/approve`,
   `POST /patients/{id}/interview/items`, `DELETE /patients/{id}/interview/items/{iid}`,
   `GET|PUT|DELETE /patients/{id}/interview/items/{iid}/audio` (PUT multipart `audio`, walidacja jak `/audio/transcribe`
@@ -271,13 +284,14 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
 
 ## 12. Frontend – struktura
 
-`core/` (serwisy: auth, admin, patients, chat, portal, audio-recording, speech, interview; guardy: `doctorGuard` = lekarz lub admin,
+`core/` (serwisy: auth, admin, patients, chat, portal, audio-recording, speech, interview, plan; guardy: `doctorGuard` = lekarz lub admin,
 `adminGuard`, `patientGuard`, `guestGuard`; interceptor JWT z wylogowaniem przy 401),
-`features/` (auth, dashboard, patient-info + patient-care + patient-interview, chat, admin-panel + llm-logs + knowledge-base +
+`features/` (auth, dashboard, patient-info + patient-care + patient-interview + patient-plan, chat, admin-panel + llm-logs + knowledge-base +
 import-progress + interview-template, patient-portal), `shared/` (modele, navbar, utils). Trasy ładowane leniwie; `homeRoute()`:
 admin → `/admin`, pacjent → `/patient`, lekarz → `/dashboard`. Logo: `assets/images/logopedic-logo-384.png` (zmniejszona, docięta do koła kopia `logopedic-logo.png`, białe tło),
 Ikony: `shared/icon.component.ts` (`<app-icon name="…" [size]>`) – ścieżki SVG z Bootstrap Icons 1.11.3
-(MIT) wklejone inline (volume-up, mic, stop, pause, trash, plus, check), `currentColor`, `aria-hidden` – opis daje przycisk;
+(MIT) wklejone inline (volume-up, mic, stop, pause, trash, plus, check, check-circle, pause-circle, x-circle, circle,
+arrow-left, arrow-right, close, chevron-right), `currentColor`, `aria-hidden` – opis daje przycisk;
 nowe ikony kopiuj z `icons/<nazwa>.svg` paczki bootstrap-icons. Emoji nie używamy jako ikon przycisków.
 Logo wyświetlane jako okrągła plakietka (`rounded-full bg-white`) – 120 px w pasku nawigacji, 192 px na stronie logowania; obok logo w nawigacji nazwa w dwóch liniach: „Logoped” (text-2xl, pogrubione)
 i pod nim „Assistant” (text-sm).
@@ -322,7 +336,7 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 - Backend: `cd backend && uv run ruff check src tests && uv run ruff format --check src tests && uv run pytest -q`
   (conftest: SQLite w katalogu tymczasowym, fikstury `client`, `make_headers`, `fake_index` – podstawione
   embeddingi i Qdrant). Testy obejmują: izolację danych między lekarzami, role, admina, portal pacjenta,
-  wywiad (szablon, migawka zatwierdzenia w kontekście LLM, nagrania i transkrypcja, izolacja, usuwanie z pacjentem), anonimizację (odmiany, płeć, wzorce, zachowanie treści klinicznej, zapis do logu), RAG (parser, filtry,
+  plan działania (CRUD, kolejność, izolacja, kontekst LLM tylko po włączeniu, usuwanie z pacjentem), wywiad (szablon, migawka zatwierdzenia w kontekście LLM, nagrania i transkrypcja, izolacja, usuwanie z pacjentem), anonimizację (odmiany, płeć, wzorce, zachowanie treści klinicznej, zapis do logu), RAG (parser, filtry,
   źródła, fallback trafności), bazę wiedzy (formaty, skany, chunking, OCR – logika linii i orientacji,
   sesje, duplikaty, bezpieczeństwo ścieżek, idempotencja, ponawianie, postęp).
 - Frontend: `npx ng test --watch=false --browsers=ChromeHeadlessNoSandbox && npx ng build`.
@@ -333,6 +347,8 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-07** – Blok „Plan działania” w karcie pacjenta: diagram kart-kroków ze statusami (zakończony / zawieszony /
+  niewykonalny, nowy = zaplanowany), okno edycji z opisem, zmianą nazwy, kolejności i usuwaniem; opcjonalnie w kontekście LLM.
 - **2026-11-07** – Ikony Bootstrap Icons (inline SVG, komponent `app-icon`) zamiast emoji: odsłuch, nagrywanie, stop/pauza, usuwanie, dodawanie, zatwierdzanie.
 - **2026-11-07** – Sekcja „Wywiad pacjenta” przed zaleceniami: szablon pytań (edycja w panelu admina) + własne pytania,
   nagrania odpowiedzi w gabinecie z transkrypcją Whisper i odsłuchem, ręczna edycja, „Zatwierdź”; zatwierdzony wywiad

@@ -6,6 +6,7 @@ import { PatientsService } from '../../core/patients.service';
 import { PatientAccount, PatientNotification, Recommendation } from '../../shared/models';
 import { emptyToNull } from '../../shared/utils';
 import { PatientInterviewComponent } from './patient-interview.component';
+import { PatientPlanComponent } from './patient-plan.component';
 
 function apiError(err: unknown, fallback: string): string {
   if (err instanceof HttpErrorResponse && typeof err.error?.detail === 'string') {
@@ -14,11 +15,11 @@ function apiError(err: unknown, fallback: string): string {
   return fallback;
 }
 
-/** Konto pacjenta, wywiad, zalecenia widoczne w panelu pacjenta i powiadomienia e-mail. */
+/** Konto pacjenta, wywiad, plan działania, zalecenia widoczne w panelu pacjenta i powiadomienia e-mail. */
 @Component({
   selector: 'app-patient-care',
   standalone: true,
-  imports: [ReactiveFormsModule, DatePipe, PatientInterviewComponent],
+  imports: [ReactiveFormsModule, DatePipe, PatientInterviewComponent, PatientPlanComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mt-6 grid gap-6 lg:grid-cols-2">
@@ -97,6 +98,8 @@ function apiError(err: unknown, fallback: string): string {
     </div>
 
     <app-patient-interview [patientId]="patientId" />
+
+    <app-patient-plan [patientId]="patientId" />
 
     <section class="card mt-6">
       <h2 class="mb-4 font-semibold">Zalecenia i wskazania do leczenia ({{ recommendations().length }})</h2>

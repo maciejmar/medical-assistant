@@ -394,3 +394,37 @@ class InterviewTemplateOut(BaseModel):
     questions: list[str]
     is_default: bool
     updated_at: datetime | None
+
+
+PlanStatus = Literal["planned", "completed", "suspended", "infeasible"]
+
+
+class PlanStepIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=20000)
+    status: PlanStatus = "planned"
+
+
+class PlanStepOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    position: int
+    title: str
+    description: str
+    status: PlanStatus
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlanOut(BaseModel):
+    include_in_context: bool
+    steps: list[PlanStepOut]
+
+
+class PlanSettingsIn(BaseModel):
+    include_in_context: bool
+
+
+class PlanOrderIn(BaseModel):
+    step_ids: list[int] = Field(max_length=500)
