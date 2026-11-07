@@ -63,6 +63,10 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `patient_accounts` | patient_id (unique) ↔ user_id (unique) – powiązanie karty z kontem pacjenta |
 | `patient_recommendations` | user_id, patient_id, title, content, created_at, updated_at |
 | `patient_notifications` | user_id, patient_id, recipient, subject, body, status (`sent`/`failed`), error |
+| `interview_templates` | id=1 (jeden wiersz), questions (JSON – lista pytań), updated_by, updated_at; brak wiersza = `DEFAULT_QUESTIONS` z `api/interview.py` |
+| `patient_interviews` | patient_id (PK), user_id, status (`draft`/`approved`), approved_items (JSON – migawka [{question, answer}] z chwili zatwierdzenia), approved_at |
+| `patient_interview_items` | patient_id, position, question, answer, created_at, updated_at |
+| `patient_interview_audio` | item_id (PK → items), patient_id, content_type, data (LargeBinary – nagranie w bazie, bez wolumenu), size |
 | `llm_calls` | user_id, operation, model_name, request (JSON – wiadomości **po anonimizacji**), response, status, error, tokeny, duration_ms |
 | `kb_documents` | title, filename, category, audience, icd10, icd11, tags, text (pełny odczytany tekst), chunks, status (`pending`/`indexed`/`error`), error, uploaded_by, source_path (import z katalogu), content_hash, pages, created_at, indexed_at |
 | `kb_private_documents` | document_id (PK → kb_documents), owner_id (→ users) – dokument prywatny; brak wpisu = wiedza wspólna |
@@ -70,7 +74,7 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `kb_ocr_pages` | sha256, text, confidence – pierwotna pamięć OCR Tesseracta (tylko odczyt; traktowana jak wyniki klucza `tesseract:pol+eng:c60`) |
 
 Usuwanie konta usuwa też jego prywatne materiały bazy wiedzy (wiersze i punkty w Qdrant), a w materiałach
-wspólnych zeruje `uploaded_by`. Usuwanie pacjenta (`purge_patients`) kasuje notatki, zalecenia, powiadomienia i powiązanie konta,
+wspólnych zeruje `uploaded_by`. Usuwanie pacjenta (`purge_patients`) kasuje wywiad (nagrania, pytania, stan), notatki, zalecenia, powiadomienia i powiązanie konta,
 a w `chat_history` zeruje `patient_id`. Usuwanie użytkownika robi to dla wszystkich jego pacjentów
 i zeruje `user_id` w `token_usage` i `llm_calls`.
 
@@ -131,9 +135,25 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
   `POST /api/audio/transcribe` → Whisper, język `pl`, limit 25 MB, dozwolone formaty audio), lista notatek;
   każda notatka ma przycisk 🗣️ „Odsłuchaj” (⏹️ zatrzymuje) – odczyt syntezatorem przeglądarki (Web Speech API,
   `core/speech.service.ts`), polski głos lokalny systemu preferowany (np. Paulina w Windows; głosy sieciowe wysyłają
-  tekst na zewnątrz), tekst dzielony na zdania ≤ 200 znaków (Chrome przerywa długie wypowiedzi); bez backendu.
+  tekst na zewnątrz), tekst dzielony na zdania ≤ 200 znaków (Chrome przerywa długie wypowiedzi); bez backendu. Odporność na błędy
+  Chrome: fragmenty odtwarzane po kolei (następny w `onend` poprzedniego), bieżąca wypowiedź trzymana w polu (GC),
+  `cancel()` tylko gdy coś gra i nowy `speak()` po 150 ms, `resume()` przed startem, oczekiwanie na `voiceschanged`.
 - **Historia pacjenta** – zakładki „Sesje i notatki” oraz „Pytania do asystenta” (`GET /api/patients/{id}/chat-history`:
   wiadomości z `patient_id` pacjenta, łączone w pary pytanie–odpowiedź, link „Otwórz rozmowę”).
+- **Wywiad pacjenta** (komponent `patient-interview`, w `patient-care` przed „Zalecenia i wskazania do leczenia”):
+  tabela Pytanie | Odpowiedź. Przy pierwszym otwarciu (`GET /api/patients/{id}/interview`) wywiad jest zakładany
+  z bieżącego szablonu (zmiana szablonu nie rusza istniejących wywiadów); lekarz dodaje własne pytania i usuwa zbędne.
+  Przy pytaniu: 🎙️ nagranie odpowiedzi pacjenta w gabinecie (`AudioRecordingService` → `PUT …/items/{iid}/audio`) –
+  serwer zapisuje nagranie (zastępuje poprzednie) i zwraca transkrypcję Whisper (`pl`), którą frontend **dokleja** do pola
+  odpowiedzi (`mergeTranscript`; serwer odpowiedzi nie nadpisuje; przy błędzie transkrypcji nagranie i tak zostaje),
+  🔊 odsłuch nagrania (blob przez HttpClient z JWT → `Audio`), usuwanie nagrania. „Zapisz szkic” (`PUT …/interview`)
+  i „Zatwierdź” (`POST …/interview/approve`) – zatwierdzenie zapisuje migawkę `approved_items`. Status `approved` tylko,
+  gdy treść = migawka (poprawka po zatwierdzeniu → `draft`, cofnięcie → znów `approved`); znacznik „Niezapisane zmiany”.
+  **Do LLM trafia wyłącznie zatwierdzona migawka**: `describe_patient(patient, interview)` dopisuje sekcję
+  „Wywiad z pacjentem / opiekunem (zatwierdzony przez lekarza):” z parami `- pytanie / Odpowiedź: …` (tylko pytania
+  z odpowiedzią), dzięki czemu wywiad trafia też do kroku przepisywania zapytania; `ANSWER_SYSTEM` każe odnosić
+  zalecenia do wywiadu i cytować fakty o pacjencie jako „(wywiad)”/„(opis pacjenta)”, nie numerem źródła.
+  Anonimizacja jak dla reszty kontekstu (centralnie w `src/llm.py`).
 - **Konto pacjenta, zalecenia, powiadomienia** (komponent `patient-care`): utworzenie/powiązanie konta pacjenta
   (`PUT /api/patients/{id}/account` – istniejące konto musi mieć `ROLE_PATIENT` i nie być powiązane z inną kartą;
   nowe wymaga hasła), odłączenie; CRUD zaleceń z opcją „powiadom e-mailem”; wysyłka powiadomień e-mail
@@ -158,6 +178,11 @@ Konto niepowiązane z kartą → komunikat 404.
   w kolorze tła między segmentami, stonowana siatka 1 px, skrócone liczby na osi (tys./mln), tooltipy pl-PL, zarządzanie kontami:
   tworzenie (`POST /api/admin/users` z rolą), zmiana roli z listy (opcje z `[selected]`, nie `[value]` na select –
   inaczej przeglądarka pokazuje zawsze pierwszą opcję), nowe hasło, blokowanie, usuwanie; własnego konta nie można zmienić.
+- **Szablon wywiadu** (komponent `interview-template` na dole `/admin`): textarea „jedno pytanie w wierszu”,
+  „Zapisz szablon” (`PUT /api/admin/interview-template` – białe znaki scalane, puste wiersze pomijane),
+  „Przywróć domyślny” (`DELETE`). Domyślnie 16 pytań wywiadu logopedycznego (powód zgłoszenia, przebieg trudności,
+  ciąża i poród, rozwój ruchowy i mowy, karmienie, oddychanie, słuch, choroby/operacje, zgryz i nawyki, wywiad rodzinny,
+  środowisko językowe, lateralizacja, dotychczasowa terapia, funkcjonowanie emocjonalno-społeczne, oczekiwania).
 - **`/admin/llm`** – log zapytań LLM: lista (filtr operacji i statusu, stronicowanie po 50) i szczegóły
   (wiadomości wysłane do modelu i odpowiedź). Retencja `LLM_LOG_RETENTION_DAYS` (czyszczenie przy starcie).
 - **`/admin/knowledge`** – baza wiedzy RAG (sekcja 10).
@@ -232,6 +257,10 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
   `GET|POST /patients/{id}/notes`, `DELETE /patients/{id}/notes/{note_id}`, `GET /patients/{id}/chat-history`,
   `GET|PUT|DELETE /patients/{id}/account`, `GET|POST /patients/{id}/recommendations`,
   `PUT|DELETE /patients/{id}/recommendations/{rid}`, `GET|POST /patients/{id}/notifications`
+- `interview`: `GET|PUT /patients/{id}/interview`, `POST /patients/{id}/interview/approve`,
+  `POST /patients/{id}/interview/items`, `DELETE /patients/{id}/interview/items/{iid}`,
+  `GET|PUT|DELETE /patients/{id}/interview/items/{iid}/audio` (PUT multipart `audio`, walidacja jak `/audio/transcribe`
+  – wspólna funkcja `read_audio_upload`); `GET|PUT|DELETE /admin/interview-template` (tylko admin)
 - `portal`: `GET /portal/me`
 - `chat`: `POST /chat` (SSE), `GET /chat/conversations`, `GET|DELETE /chat/conversations/{id}`
 - `audio`: `POST /audio/transcribe`
@@ -242,10 +271,10 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
 
 ## 12. Frontend – struktura
 
-`core/` (serwisy: auth, admin, patients, chat, portal, audio-recording; guardy: `doctorGuard` = lekarz lub admin,
+`core/` (serwisy: auth, admin, patients, chat, portal, audio-recording, speech, interview; guardy: `doctorGuard` = lekarz lub admin,
 `adminGuard`, `patientGuard`, `guestGuard`; interceptor JWT z wylogowaniem przy 401),
-`features/` (auth, dashboard, patient-info + patient-care, chat, admin-panel + llm-logs + knowledge-base +
-import-progress, patient-portal), `shared/` (modele, navbar, utils). Trasy ładowane leniwie; `homeRoute()`:
+`features/` (auth, dashboard, patient-info + patient-care + patient-interview, chat, admin-panel + llm-logs + knowledge-base +
+import-progress + interview-template, patient-portal), `shared/` (modele, navbar, utils). Trasy ładowane leniwie; `homeRoute()`:
 admin → `/admin`, pacjent → `/patient`, lekarz → `/dashboard`. Logo: `assets/images/logopedic-logo-384.png` (zmniejszona, docięta do koła kopia `logopedic-logo.png`, białe tło),
 wyświetlane jako okrągła plakietka (`rounded-full bg-white`) – 120 px w pasku nawigacji, 192 px na stronie logowania; obok logo w nawigacji nazwa w dwóch liniach: „Logoped” (text-2xl, pogrubione)
 i pod nim „Assistant” (text-sm).
@@ -290,7 +319,7 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 - Backend: `cd backend && uv run ruff check src tests && uv run ruff format --check src tests && uv run pytest -q`
   (conftest: SQLite w katalogu tymczasowym, fikstury `client`, `make_headers`, `fake_index` – podstawione
   embeddingi i Qdrant). Testy obejmują: izolację danych między lekarzami, role, admina, portal pacjenta,
-  anonimizację (odmiany, płeć, wzorce, zachowanie treści klinicznej, zapis do logu), RAG (parser, filtry,
+  wywiad (szablon, migawka zatwierdzenia w kontekście LLM, nagrania i transkrypcja, izolacja, usuwanie z pacjentem), anonimizację (odmiany, płeć, wzorce, zachowanie treści klinicznej, zapis do logu), RAG (parser, filtry,
   źródła, fallback trafności), bazę wiedzy (formaty, skany, chunking, OCR – logika linii i orientacji,
   sesje, duplikaty, bezpieczeństwo ścieżek, idempotencja, ponawianie, postęp).
 - Frontend: `npx ng test --watch=false --browsers=ChromeHeadlessNoSandbox && npx ng build`.
@@ -301,6 +330,9 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-07** – Sekcja „Wywiad pacjenta” przed zaleceniami: szablon pytań (edycja w panelu admina) + własne pytania,
+  nagrania odpowiedzi w gabinecie z transkrypcją Whisper i odsłuchem, ręczna edycja, „Zatwierdź”; zatwierdzony wywiad
+  dołączany do kontekstu pacjenta w czacie RAG.
 - **2026-11-07** – Odsłuchiwanie notatek (synteza mowy w przeglądarce, polski głos lokalny); większe logo Webaby.
 - **2026-11-07** – Logo Webaby w pasku nawigacji i wspólna stopka całej aplikacji (copyright, webaby.io, contact@webaby.io).
 - **2026-11-07** – Ponowne przetwarzanie dokumentów z oryginałów (cała baza lub jeden dokument): rejestr silników OCR,

@@ -348,3 +348,49 @@ class KbStoredFileOut(BaseModel):
 class KnowledgeBaseOut(BaseModel):
     builtin_documents: int
     documents: list[KbDocumentOut]
+
+
+class InterviewItemIn(BaseModel):
+    id: int
+    question: str = Field(min_length=1, max_length=2000)
+    answer: str = Field(default="", max_length=20000)
+
+
+class InterviewSaveIn(BaseModel):
+    items: list[InterviewItemIn] = Field(max_length=200)
+
+
+class InterviewQuestionIn(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+
+
+class InterviewItemOut(BaseModel):
+    id: int
+    position: int
+    question: str
+    answer: str
+    has_audio: bool
+    updated_at: datetime
+
+
+class InterviewOut(BaseModel):
+    status: str
+    approved_at: datetime | None
+    updated_at: datetime
+    items: list[InterviewItemOut]
+
+
+class InterviewRecordingOut(BaseModel):
+    item: InterviewItemOut
+    transcript: str | None
+    error: str | None = None
+
+
+class InterviewTemplateIn(BaseModel):
+    questions: list[str] = Field(max_length=200)
+
+
+class InterviewTemplateOut(BaseModel):
+    questions: list[str]
+    is_default: bool
+    updated_at: datetime | None

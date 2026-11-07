@@ -24,12 +24,8 @@ ALLOWED_EXTENSIONS = {
 }
 
 
-@router.post("/transcribe", response_model=TranscriptionOut)
-async def transcribe(
-    doctor: CurrentDoctor,
-    audio: Annotated[UploadFile, File(description="Plik audio (wav, mp3, webm, ogg, m4a…)")],
-    language: Annotated[str, Form(pattern=r"^[a-z]{2}$")] = "pl",
-) -> TranscriptionOut:
+async def read_audio_upload(audio: UploadFile) -> tuple[bytes, str, str]:
+    """Waliduje przesłany plik audio; zwraca (dane, nazwa pliku, typ MIME)."""
     filename = PurePath(audio.filename or "recording.webm").name
     extension = PurePath(filename).suffix.lower()
     content_type = (audio.content_type or "").split(";")[0]
@@ -43,12 +39,21 @@ async def transcribe(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Plik audio jest pusty")
     if len(data) > settings.max_audio_bytes:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Plik audio jest zbyt duży")
+    return data, filename, content_type or "application/octet-stream"
 
+
+@router.post("/transcribe", response_model=TranscriptionOut)
+async def transcribe(
+    doctor: CurrentDoctor,
+    audio: Annotated[UploadFile, File(description="Plik audio (wav, mp3, webm, ogg, m4a…)")],
+    language: Annotated[str, Form(pattern=r"^[a-z]{2}$")] = "pl",
+) -> TranscriptionOut:
+    data, filename, content_type = await read_audio_upload(audio)
     try:
         text = await transcribe_audio(
             data,
             filename=filename,
-            content_type=content_type or "application/octet-stream",
+            content_type=content_type,
             language=language,
             user_id=doctor.id,  # type: ignore[arg-type]
         )

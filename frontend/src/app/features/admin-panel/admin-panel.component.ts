@@ -7,6 +7,7 @@ import { ChartConfiguration, ChartData } from 'chart.js';
 import { BaseChartDirective } from 'ng2-charts';
 import { AdminService } from '../../core/admin.service';
 import { AuthService } from '../../core/auth.service';
+import { InterviewTemplateComponent } from './interview-template.component';
 import {
   LEGEND,
   SERIES,
@@ -24,7 +25,7 @@ import { ROLE_LABELS, Role, SystemStats, UsageReport, User } from '../../shared/
 @Component({
   selector: 'app-admin-panel',
   standalone: true,
-  imports: [BaseChartDirective, DecimalPipe, ReactiveFormsModule, RouterLink],
+  imports: [BaseChartDirective, DecimalPipe, InterviewTemplateComponent, ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -194,6 +195,8 @@ import { ROLE_LABELS, Role, SystemStats, UsageReport, User } from '../../shared/
         </table>
       </div>
     </section>
+
+    <app-interview-template />
   `,
 })
 export class AdminPanelComponent {

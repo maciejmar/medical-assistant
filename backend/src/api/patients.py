@@ -7,8 +7,11 @@ from sqlmodel import col, delete, select
 from ..auth import CurrentDoctor, SessionDep
 from ..database import (
     ChatMessage,
+    InterviewAudio,
+    InterviewItem,
     Patient,
     PatientAccount,
+    PatientInterview,
     PatientNote,
     PatientNotification,
     Recommendation,
@@ -41,7 +44,15 @@ async def purge_patients(session: SessionDep, patient_ids: list[int]) -> None:
     """Usuwa pacjentów wraz z danymi zależnymi (bez commita – robi go wywołujący)."""
     if not patient_ids:
         return
-    for model in (PatientNote, Recommendation, PatientNotification, PatientAccount):
+    for model in (
+        InterviewAudio,
+        InterviewItem,
+        PatientInterview,
+        PatientNote,
+        Recommendation,
+        PatientNotification,
+        PatientAccount,
+    ):
         await session.exec(delete(model).where(col(model.patient_id).in_(patient_ids)))
     await session.exec(
         update(ChatMessage)

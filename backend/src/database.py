@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, LargeBinary, Text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import Field, SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -148,6 +148,72 @@ class PatientNotification(SQLModel, table=True):
     status: str = Field(max_length=20)
     error: str | None = Field(default=None, max_length=500)
     created_at: datetime = _ts(index=True)
+
+
+class InterviewTemplate(SQLModel, table=True):
+    """Szablon pytań wywiadu (jeden wiersz, id=1), edytowany przez administratora.
+    Brak wiersza = domyślne pytania z src.api.interview.DEFAULT_QUESTIONS."""
+
+    __tablename__ = "interview_templates"
+
+    id: int | None = Field(default=None, primary_key=True)
+    questions: list = Field(sa_column=Column(JSON, nullable=False))
+    updated_by: int | None = Field(
+        default=None, sa_column=Column(Integer, ForeignKey("users.id"), nullable=True)
+    )
+    updated_at: datetime = _ts()
+
+
+class PatientInterview(SQLModel, table=True):
+    """Stan wywiadu pacjenta. `approved_items` to migawka [{question, answer}] z chwili
+    zatwierdzenia – tylko ona trafia do kontekstu LLM (kolejne poprawki dopiero po ponownym
+    zatwierdzeniu)."""
+
+    __tablename__ = "patient_interviews"
+
+    patient_id: int = Field(sa_column=Column(Integer, ForeignKey("patients.id"), primary_key=True))
+    user_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    )
+    status: str = Field(default="draft", max_length=20)
+    approved_items: list | None = Field(default=None, sa_column=Column(JSON))
+    approved_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    created_at: datetime = _ts()
+    updated_at: datetime = _ts()
+
+
+class InterviewItem(SQLModel, table=True):
+    """Pytanie wywiadu z odpowiedzią (wpisaną przez lekarza lub z transkrypcji nagrania)."""
+
+    __tablename__ = "patient_interview_items"
+
+    id: int | None = Field(default=None, primary_key=True)
+    patient_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
+    )
+    position: int = Field(default=0)
+    question: str = Field(sa_column=Column(Text, nullable=False))
+    answer: str = Field(default="", sa_column=Column(Text, nullable=False))
+    created_at: datetime = _ts()
+    updated_at: datetime = _ts()
+
+
+class InterviewAudio(SQLModel, table=True):
+    """Nagranie odpowiedzi pacjenta na pytanie wywiadu (osobna tabela, żeby lista pytań nie
+    ładowała danych binarnych)."""
+
+    __tablename__ = "patient_interview_audio"
+
+    item_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("patient_interview_items.id"), primary_key=True)
+    )
+    patient_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
+    )
+    content_type: str = Field(max_length=100)
+    data: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    size: int = Field(default=0)
+    created_at: datetime = _ts()
 
 
 class LlmCall(SQLModel, table=True):

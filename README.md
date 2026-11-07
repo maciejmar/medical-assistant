@@ -183,7 +183,7 @@ uruchomieniem.
 | Rola | Dostęp |
 | --- | --- |
 | `ROLE_ADMIN` | Panel administratora (`/admin`, `/admin/llm`) oraz – jak użytkownik – własni pacjenci i asystent |
-| `ROLE_DOCTOR` (w UI „Użytkownik”) | Własni pacjenci, notatki, zalecenia, powiadomienia, asystent |
+| `ROLE_DOCTOR` (w UI „Użytkownik”) | Własni pacjenci, notatki, wywiad, zalecenia, powiadomienia, asystent |
 | `ROLE_PATIENT` | Panel pacjenta (`/patient`): rozpoznanie, zalecenia, powiadomienia – bez notatek lekarza |
 
 ## Prywatność i bezpieczeństwo
@@ -192,7 +192,8 @@ uruchomieniem.
 - Administrator nie widzi kart pacjentów ani notatek innych lekarzy. Widzi natomiast log zapytań LLM (`llm_calls`):
   pełną treść promptów (w tym pytania lekarzy i zanonimizowany kontekst pacjenta) oraz odpowiedzi modelu. Logi starsze
   niż `LLM_LOG_RETENTION_DAYS` są usuwane przy starcie; `LLM_LOG_ENABLED=false` wyłącza zapisywanie.
-- Do zewnętrznego LLM trafia kontekst pacjenta bez imienia i nazwiska (wiek, kod ICD, rozpoznanie, opis).
+- Do zewnętrznego LLM trafia kontekst pacjenta bez imienia i nazwiska (wiek, płeć, kod ICD, rozpoznanie, opis
+  oraz **zatwierdzony** wywiad – pytania z odpowiedziami; szkic wywiadu nie jest wysyłany).
 - Każdy tekst wysyłany do LLM (pytanie, historia rozmowy, kontekst pacjenta, zapytanie do embeddingu) przechodzi
   przez `backend/src/anonymizer.py`: imiona i nazwiska pacjentów lekarza (z odmianą) zastępowane są przez
   `[IMIĘ PACJENTA]`/`[IMIĘ PACJENTKI]` i `[NAZWISKO]`, a PESEL, telefon i adres (z kodem pocztowym) – znacznikami.
@@ -201,7 +202,8 @@ uruchomieniem.
   a do wyszukiwania w bazie wiedzy trafia tekst bez znaczników. Log LLM w panelu administratora zawiera już
   wersję zanonimizowaną.
 - Ograniczenie: imiona osób spoza kart pacjentów (np. rodziców) wpisane wolnym tekstem nie są wykrywane.
-- Nagrania do dyktowania notatek trafiają do zewnętrznego API Whisper w oryginale (głosu nie da się
+- Nagrania odpowiedzi z wywiadu są przechowywane w bazie (`patient_interview_audio`) i usuwane razem z pacjentem.
+- Nagrania do dyktowania notatek i odpowiedzi z wywiadu trafiają do zewnętrznego API Whisper w oryginale (głosu nie da się
   zanonimizować) – do pełnej ochrony danych Whisper powinien działać na własnej infrastrukturze.
 - Token JWT jest przechowywany w `localStorage`. Przy publicznym wystawieniu aplikacji zalecane są HTTPS, polityka CSP
   i limit prób logowania na reverse proxy.
