@@ -18,16 +18,16 @@ interface StatusStyle {
   icon: IconName;
   /** Kolor ikony i etykiety statusu. */
   tone: string;
-  /** Akcent (lewa krawędź) karty kroku. */
-  accent: string;
+  /** Pastelowe tło, ramka i akcent (lewa krawędź) karty kroku – odcina kartę od białej sekcji. */
+  card: string;
 }
 
 /** Statusy kroków: kolor zawsze z ikoną i etykietą (nigdy sam kolor). */
 export const PLAN_STATUSES: Record<PlanStatus, StatusStyle> = {
-  planned: { label: 'Zaplanowany', icon: 'circle', tone: 'text-slate-500', accent: 'border-l-slate-300' },
-  completed: { label: 'Zakończony', icon: 'check-circle', tone: 'text-emerald-600', accent: 'border-l-emerald-500' },
-  suspended: { label: 'Zawieszony', icon: 'pause-circle', tone: 'text-amber-600', accent: 'border-l-amber-500' },
-  infeasible: { label: 'Niewykonalny', icon: 'x-circle', tone: 'text-red-600', accent: 'border-l-red-500' },
+  planned: { label: 'Zaplanowany', icon: 'circle', tone: 'text-sky-700', card: 'bg-sky-50 border-sky-200 border-l-sky-400' },
+  completed: { label: 'Zakończony', icon: 'check-circle', tone: 'text-emerald-700', card: 'bg-emerald-50 border-emerald-200 border-l-emerald-500' },
+  suspended: { label: 'Zawieszony', icon: 'pause-circle', tone: 'text-amber-700', card: 'bg-amber-50 border-amber-200 border-l-amber-500' },
+  infeasible: { label: 'Niewykonalny', icon: 'x-circle', tone: 'text-red-700', card: 'bg-rose-50 border-rose-200 border-l-red-500' },
 };
 
 const STATUS_ORDER: PlanStatus[] = ['planned', 'completed', 'suspended', 'infeasible'];
@@ -77,8 +77,8 @@ function apiError(err: unknown, fallback: string): string {
             <li class="flex shrink-0 items-center">
               <button
                 type="button"
-                class="flex h-full min-h-[7.5rem] w-48 flex-col rounded-xl border border-l-4 border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                [class]="status(step.status).accent"
+                class="flex h-full min-h-[7.5rem] w-48 flex-col rounded-xl border border-l-4 p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md hover:brightness-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                [class]="status(step.status).card"
                 (click)="openStep(step)"
                 [attr.aria-label]="'Krok ' + (i + 1) + ': ' + step.title + ', status: ' + status(step.status).label + '. Otwórz szczegóły'"
               >
@@ -97,7 +97,7 @@ function apiError(err: unknown, fallback: string): string {
           <li class="flex shrink-0 items-center">
             <button
               type="button"
-              class="flex h-full min-h-[7.5rem] w-48 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              class="flex h-full min-h-[7.5rem] w-48 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-500 transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               (click)="openNew()"
               aria-label="Dodaj nowy krok planu"
             >
