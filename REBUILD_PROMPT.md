@@ -121,8 +121,12 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
 ## 7. Funkcje lekarza
 
 - **Dashboard** – lista pacjentów z wyszukiwarką, dodawanie pacjenta, ostatnie notatki; tło: półprzezroczysta
-  grafika `logoped-monochrome.png` przyklejona do dołu nad stopką; stała stopka 48 px (`h-12`, `#02121c`)
-  z „© 2026 Webaby” i ikonami social media (WhatsApp, Facebook, Instagram, X).
+  grafika `logoped-monochrome.png` przyklejona do dołu nad stopką.
+- **Stopka całej aplikacji** (`shared/footer.component.ts`, także na stronie logowania): stała, 48 px (`h-12`, `#02121c`),
+  logo Webaby (`webabylogo-mark.png` – przycięty `webabylogo.png`, czarny znak odwrócony filtrem `invert` do bieli),
+  „© <rok> Webaby. Wszelkie prawa zastrzeżone.”, link https://webaby.io, `mailto:contact@webaby.io` (na telefonie „Kontakt”),
+  ikony social media (WhatsApp, Facebook, Instagram, X); `main` ma `pb-16`, żeby stopka nie zasłaniała treści.
+  Logo Webaby (48 px) także po prawej stronie paska nawigacji, jako link do webaby.io.
 - **Karta pacjenta** – edycja danych, nowa notatka (wpisywana lub **dyktowana**: `MediaRecorder` →
   `POST /api/audio/transcribe` → Whisper, język `pl`, limit 25 MB, dozwolone formaty audio), lista notatek.
 - **Historia pacjenta** – zakładki „Sesje i notatki” oraz „Pytania do asystenta” (`GET /api/patients/{id}/chat-history`:
@@ -294,6 +298,7 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-07** – Logo Webaby w pasku nawigacji i wspólna stopka całej aplikacji (copyright, webaby.io, contact@webaby.io).
 - **2026-11-07** – Ponowne przetwarzanie dokumentów z oryginałów (cała baza lub jeden dokument): rejestr silników OCR,
   pamięć OCR per silnik (`kb_ocr_results`, bez utraty starych odczytów), opcja przebudowy indeksu od zera; pojedyncze
   pliki z panelu zapisują oryginał w katalogu. Aplikacja zmigrowana na serwer 187.126.17.17.
