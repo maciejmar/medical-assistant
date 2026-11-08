@@ -1,6 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { BillingService, EXHAUSTED_MESSAGE, TopUp, formatPln } from '../../core/billing.service';
 import { CreditMeterComponent } from '../../shared/credit-meter.component';
 
@@ -47,11 +48,37 @@ const STATUS_LABELS: Record<TopUp['status'], { label: string; css: string }> = {
 
         <section class="card space-y-4">
           <h2 class="font-semibold">Dokup kredyty</h2>
+          @if (paymentNotice(); as n) {
+            <p class="rounded-lg px-3 py-2 text-sm" [class]="n.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'" role="status">{{ n.text }}</p>
+          }
+          <fieldset>
+            <legend class="label">Kwota</legend>
+            <div class="flex flex-wrap gap-3">
+              @for (amount of d.payment.amounts; track amount) {
+                <button
+                  type="button"
+                  class="min-w-[6rem] rounded-xl border-2 px-4 py-3 text-base font-semibold transition"
+                  [class]="selected() === amount ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300'"
+                  [attr.aria-pressed]="selected() === amount"
+                  (click)="selected.set(amount)"
+                >{{ pln(amount) }}</button>
+              }
+            </div>
+          </fieldset>
           <div class="flex flex-wrap gap-3">
-            @for (amount of d.payment.amounts; track amount) {
-              <button type="button" class="btn-secondary min-w-[6rem] !py-3 text-base" [disabled]="busy()" (click)="order(amount)">{{ pln(amount) }}</button>
+            @if (d.payment.online_enabled) {
+              <button type="button" class="btn-primary" [disabled]="busy() || !selected()" (click)="payOnline()">
+                Zapłać online{{ selected() ? ' ' + pln(selected()!) : '' }}
+              </button>
             }
+            <button type="button" class="btn-secondary" [disabled]="busy() || !selected()" (click)="order(selected()!)">Przelew tradycyjny</button>
           </div>
+          @if (d.payment.online_enabled) {
+            <p class="text-xs text-slate-500">
+              Płatność online: {{ methodsLabel(d.payment.online_methods) }} – kredyty dochodzą od razu po opłaceniu.
+              Przelew tradycyjny – po zaksięgowaniu wpłaty (zwykle 1 dzień roboczy).
+            </p>
+          }
           @if (error(); as e) {
             <p class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{{ e }}</p>
           }
@@ -106,9 +133,65 @@ export class CreditsComponent implements OnInit {
   protected readonly ordered = signal<TopUp | null>(null);
   protected readonly copied = signal(false);
   protected readonly exhaustedMessage = EXHAUSTED_MESSAGE;
+  protected readonly selected = signal<number | null>(null);
+  protected readonly paymentNotice = signal<{ ok: boolean; text: string } | null>(null);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   ngOnInit(): void {
     this.api.refresh();
+    const params = this.route.snapshot.queryParamMap;
+    const result = params.get('payment');
+    if (result === 'success' && params.get('session_id')) {
+      this.paymentNotice.set({ ok: true, text: 'Sprawdzamy płatność…' });
+      this.api.syncCheckout(params.get('session_id')!).subscribe({
+        next: (t) => {
+          this.paymentNotice.set(
+            t.status === 'confirmed'
+              ? { ok: true, text: `Płatność przyjęta – dodano ${this.pln(t.amount_pln)} kredytów.` }
+              : { ok: false, text: 'Płatność jest jeszcze przetwarzana – kredyty pojawią się po jej zaksięgowaniu.' },
+          );
+          this.api.refresh();
+        },
+        error: () => this.paymentNotice.set({ ok: false, text: 'Nie udało się sprawdzić płatności – odśwież stronę za chwilę.' }),
+      });
+    } else if (result === 'cancelled') {
+      this.paymentNotice.set({ ok: false, text: 'Płatność anulowana – kredyty nie zostały pobrane.' });
+    }
+    if (result) {
+      // Usuwa parametry powrotu z adresu (odświeżenie nie powtarza komunikatu).
+      void this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
+    }
+  }
+
+  protected methodsLabel(methods: string[]): string {
+    const names: Record<string, string> = { blik: 'BLIK', card: 'karta', p24: 'Przelewy24' };
+    return methods.map((m) => names[m] ?? m).join(', ');
+  }
+
+  protected payOnline(): void {
+    const amount = this.selected();
+    if (!amount) {
+      return;
+    }
+    this.busy.set(true);
+    this.error.set(null);
+    this.api.startCheckout(amount).subscribe({
+      next: ({ url }) => this.redirect(url),
+      error: (err: unknown) => {
+        this.busy.set(false);
+        this.error.set(
+          err instanceof HttpErrorResponse && typeof err.error?.detail === 'string'
+            ? err.error.detail
+            : 'Nie udało się rozpocząć płatności.',
+        );
+      },
+    });
+  }
+
+  /** Przejście na stronę płatności operatora (wydzielone – podmieniane w testach). */
+  protected redirect(url: string): void {
+    window.location.assign(url);
   }
 
   protected pln(value: number): string {

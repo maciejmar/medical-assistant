@@ -30,6 +30,8 @@ export interface PaymentDetails {
   recipient: string;
   bank_account: string;
   amounts: number[];
+  online_enabled: boolean;
+  online_methods: string[];
 }
 
 export interface MyCredits {
@@ -82,6 +84,16 @@ export class BillingService {
 
   orderTopUp(amount: number): Observable<TopUp> {
     return this.http.post<TopUp>('/api/billing/topups', { amount_pln: amount });
+  }
+
+  /** Płatność online (Stripe Checkout) – zwraca adres strony płatności operatora. */
+  startCheckout(amount: number): Observable<{ topup_id: number; url: string }> {
+    return this.http.post<{ topup_id: number; url: string }>('/api/billing/checkout', { amount_pln: amount });
+  }
+
+  /** Po powrocie od operatora – odczyt stanu płatności (gdyby powiadomienie operatora się spóźniało). */
+  syncCheckout(sessionId: string): Observable<TopUp> {
+    return this.http.post<TopUp>('/api/billing/checkout/sync', { session_id: sessionId });
   }
 
   cancelTopUp(id: number): Observable<void> {

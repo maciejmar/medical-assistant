@@ -72,6 +72,7 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `patient_events` | patient_id, type (`visit`/`consultation`/`stage_start`/`stage_end`/`other`), title, starts_at, ends_at (nullable), all_day, location, description, plan_step_id (nullable, bez FK), created_by + created_by_role (`doctor`/`patient`, bez FK), created_at, updated_at |
 | `user_subscriptions` | user_id (PK), started_at (początek okien), monthly_limit_pln, updated_at; brak wiersza = data założenia konta i `BILLING_DEFAULT_LIMIT_PLN` |
 | `credit_topups` | user_id, amount_pln, status (`pending`/`confirmed`/`rejected`/`cancelled`), reference (`LOGOPED-<user>-<id>` = tytuł przelewu, ręczne `RECZNE-…`), note, created_at, confirmed_at, confirmed_by |
+| `payment_sessions` | topup_id (→ credit_topups), user_id (bez FK), provider (`stripe`), session_id (unique), status (`open`/`paid`/`failed`/`expired`), payment_method (blik/card/p24), amount_pln, created_at, completed_at |
 | `llm_calls` | user_id, operation, model_name, request (JSON – wiadomości **po anonimizacji**), response, status, error, tokeny, duration_ms |
 | `kb_documents` | title, filename, category, audience, icd10, icd11, tags, text (pełny odczytany tekst), chunks, status (`pending`/`indexed`/`error`), error, uploaded_by, source_path (import z katalogu), content_hash, pages, created_at, indexed_at |
 | `kb_private_documents` | document_id (PK → kb_documents), owner_id (→ users) – dokument prywatny; brak wpisu = wiedza wspólna |
@@ -238,6 +239,16 @@ Konto niepowiązane z kartą → komunikat 404.
 - **Doładowanie:** `/kredyty` – kwoty `BILLING_TOPUP_AMOUNTS` (20/50/100 zł) → zamówienie `pending` z danymi przelewu
   (`TOPUP_RECIPIENT`, `TOPUP_BANK_ACCOUNT`, tytuł = reference), e-mail do `ADMIN_EMAIL` (w tle, jeśli SMTP), max 3
   oczekujące, anulowanie. Admin potwierdza wpływ („Wpłata zaksięgowana”) lub odrzuca; może też doładować ręcznie.
+- **Płatność online (`src/payments.py`, Stripe Checkout przez httpx, bez SDK):** `POST /billing/checkout` tworzy
+  zamówienie (`note="online"`) i sesję Checkout w PLN (`payment_method_types` z `STRIPE_PAYMENT_METHODS`: blik, card, p24;
+  `locale=pl`, `client_reference_id`/`metadata` = reference/topup_id, wygasa po 31 min), frontend przekierowuje na `url`.
+  Webhook `POST /api/payments/stripe/webhook` – podpis `Stripe-Signature` (HMAC-SHA256 z `t.payload`, tolerancja 300 s,
+  `STRIPE_WEBHOOK_SECRET`): `checkout.session.completed`/`async_payment_succeeded` z `payment_status=paid` i zgodną kwotą
+  → zamówienie `confirmed` (idempotentnie – sesja rozliczana raz), `expired` → `cancelled`, `async_payment_failed` →
+  `rejected`. Powrót `/kredyty?payment=success&session_id=…` → `POST /billing/checkout/sync` (odczyt sesji z API, gdy
+  webhook się spóźnia), `payment=cancelled` → komunikat; parametry usuwane z adresu. Zamówienia online nie liczą się
+  do limitu 3 oczekujących przelewów i nie trafiają na listę „do potwierdzenia” admina. Bez `STRIPE_SECRET_KEY`
+  (`online_enabled=false`) – tylko przelew tradycyjny. UI: wybór kwoty (20/50/100) + „Zapłać online” / „Przelew tradycyjny”.
 - **Wskaźnik:** `shared/credit-meter.component.ts` (pasek + „zużyte / dostępne zł”, kolor: brand < 75% ≤ amber < 100% ≤ red)
   w pasku nawigacji lekarza/admina (link do `/kredyty`, odświeżany przy każdej nawigacji i po odpowiedzi czatu),
   na stronie Kredyty i w panelu admina (`billing-admin.component.ts`: doładowania do potwierdzenia, tabela kont lekarzy
@@ -319,7 +330,8 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
   `GET|POST /patients/{id}/notes`, `DELETE /patients/{id}/notes/{note_id}`, `GET /patients/{id}/chat-history`,
   `GET|PUT|DELETE /patients/{id}/account`, `GET|POST /patients/{id}/recommendations`,
   `PUT|DELETE /patients/{id}/recommendations/{rid}`, `GET|POST /patients/{id}/notifications`
-- `billing`: `GET /billing/me`, `POST /billing/topups`, `DELETE /billing/topups/{id}`; admin: `GET /admin/billing/users`,
+- `billing`: `GET /billing/me`, `POST /billing/topups`, `DELETE /billing/topups/{id}`, `POST /billing/checkout`,
+  `POST /billing/checkout/sync`, `POST /payments/stripe/webhook` (bez JWT, podpis Stripe); admin: `GET /admin/billing/users`,
   `PATCH /admin/billing/users/{id}` (limit, start subskrypcji), `POST /admin/billing/users/{id}/topups` (ręczne),
   `GET /admin/billing/topups?status_filter=`, `POST /admin/billing/topups/{id}/confirm|reject`
 - `calendar`: `GET|POST /patients/{id}/events` (`?start=&end=` ISO), `PUT|DELETE /patients/{id}/events/{eid}`;
@@ -404,6 +416,8 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-08** – Płatności online za kredyty: Stripe Checkout (BLIK, karta, Przelewy24), automatyczne doliczenie po
+  webhooku i synchronizacja po powrocie; przelew tradycyjny zostaje jako opcja.
 - **2026-11-08** – Kalendarz: dni spoza bieżącego miesiąca na szaroniebieskim tle.
 - **2026-11-08** – Kredyty w zł: przeliczanie tokenów wg cennika modeli i kursu USD/PLN, miesięczne okno subskrypcji od
   daty startu (limit 20 zł, zerowanie z nowym oknem), wskaźnik w nawigacji i w panelu admina, doładowania 20/50/100 zł

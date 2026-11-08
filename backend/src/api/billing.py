@@ -1,16 +1,20 @@
-"""Kredyty użytkowników: wskaźnik wykorzystania, zamówienia doładowań (przelew) i panel admina."""
+"""Kredyty użytkowników: wskaźnik wykorzystania, doładowania (płatność online Stripe – BLIK, karta,
+Przelewy24 – albo przelew tradycyjny potwierdzany ręcznie) i panel administratora."""
 
+import json
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from sqlmodel import col, select
 
-from .. import billing, mailer
+from .. import billing, mailer, payments
 from ..auth import CurrentAdmin, CurrentDoctor, SessionDep
 from ..config import settings
-from ..database import CreditTopUp, Role, User, utcnow
+from ..database import CreditTopUp, PaymentSession, Role, User, utcnow
 from ..llm import _in_background
 from .schemas import (
+    CheckoutOut,
+    CheckoutSyncIn,
     CreditStatusOut,
     ManualTopUpIn,
     MyCreditsOut,
@@ -23,6 +27,8 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["billing"])
+
+ONLINE_NOTE = "online"
 
 
 def topup_amounts() -> list[float]:
@@ -65,6 +71,8 @@ def _payment() -> PaymentDetailsOut:
         recipient=settings.topup_recipient,
         bank_account=settings.topup_bank_account,
         amounts=topup_amounts(),
+        online_enabled=payments.is_configured(),
+        online_methods=payments.payment_methods() if payments.is_configured() else [],
     )
 
 
@@ -102,7 +110,9 @@ async def order_topup(body: TopUpIn, session: SessionDep, user: CurrentDoctor) -
     pending = (
         await session.exec(
             select(CreditTopUp).where(
-                CreditTopUp.user_id == user.id, CreditTopUp.status == "pending"
+                CreditTopUp.user_id == user.id,
+                CreditTopUp.status == "pending",
+                CreditTopUp.note != ONLINE_NOTE,
             )
         )
     ).all()
@@ -190,6 +200,9 @@ async def list_topups(
     query = select(CreditTopUp).order_by(col(CreditTopUp.created_at).desc()).limit(200)
     if status_filter:
         query = query.where(CreditTopUp.status == status_filter)
+    if status_filter == "pending":
+        # Płatności online potwierdza operator – admin rozpatruje tylko przelewy tradycyjne.
+        query = query.where(CreditTopUp.note != ONLINE_NOTE)
     return list((await session.exec(query)).all())
 
 
@@ -246,3 +259,133 @@ async def manual_topup(
     await session.refresh(topup)
     billing.invalidate(user.id)
     return topup
+
+
+# --- płatności online (Stripe Checkout) -------------------------------------------------------
+
+
+@router.post("/billing/checkout", response_model=CheckoutOut, status_code=status.HTTP_201_CREATED)
+async def start_checkout(body: TopUpIn, session: SessionDep, user: CurrentDoctor) -> CheckoutOut:
+    """Tworzy zamówienie i sesję płatności; frontend przekierowuje na zwrócony adres Stripe."""
+    if not payments.is_configured():
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Płatności online są wyłączone")
+    if body.amount_pln not in topup_amounts():
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Wybierz jedną z dostępnych kwot doładowania"
+        )
+    topup = CreditTopUp(user_id=user.id, amount_pln=body.amount_pln, note=ONLINE_NOTE)  # type: ignore[arg-type]
+    session.add(topup)
+    await session.flush()
+    topup.reference = f"LOGOPED-{user.id}-{topup.id}"
+    try:
+        checkout = await payments.create_checkout(
+            amount_pln=body.amount_pln,
+            reference=topup.reference,
+            topup_id=topup.id,  # type: ignore[arg-type]
+            email=user.email,
+        )
+    except payments.PaymentError as exc:
+        await session.rollback()
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+    session.add(
+        PaymentSession(
+            topup_id=topup.id,  # type: ignore[arg-type]
+            user_id=user.id,  # type: ignore[arg-type]
+            session_id=str(checkout["id"]),
+            amount_pln=body.amount_pln,
+        )
+    )
+    await session.commit()
+    return CheckoutOut(topup_id=topup.id, url=str(checkout["url"]))  # type: ignore[arg-type]
+
+
+async def _payment_for(session: SessionDep, session_id: str) -> PaymentSession | None:
+    return (
+        await session.exec(select(PaymentSession).where(PaymentSession.session_id == session_id))
+    ).first()
+
+
+async def _settle(session: SessionDep, checkout: dict) -> CreditTopUp | None:
+    """Przenosi stan sesji Stripe na zamówienie (idempotentnie). Zwraca zamówienie albo None."""
+    payment = await _payment_for(session, str(checkout.get("id")))
+    if payment is None:
+        logger.warning("Nieznana sesja płatności %s", checkout.get("id"))
+        return None
+    topup = await session.get(CreditTopUp, payment.topup_id)
+    if topup is None:
+        return None
+    if payment.status != "open":
+        return topup  # już rozliczona
+    paid = checkout.get("payment_status") == "paid"
+    now = utcnow()
+    if paid:
+        if int(checkout.get("amount_total") or 0) != round(payment.amount_pln * 100):
+            logger.error("Kwota sesji %s nie zgadza się z zamówieniem", payment.session_id)
+            return topup
+        payment.status = "paid"
+        payment.payment_method = payments.method_of(checkout)
+        if topup.status == "pending":
+            topup.status = "confirmed"
+            topup.confirmed_at = now
+    elif checkout.get("status") == "expired":
+        payment.status = "expired"
+        if topup.status == "pending":
+            topup.status = "cancelled"
+    else:
+        return topup  # płatność w toku (np. Przelewy24 – rozliczenie asynchroniczne)
+    payment.completed_at = now
+    session.add(payment)
+    session.add(topup)
+    await session.commit()
+    await session.refresh(topup)
+    billing.invalidate(topup.user_id)
+    return topup
+
+
+@router.post("/billing/checkout/sync", response_model=TopUpOut)
+async def sync_checkout(
+    body: CheckoutSyncIn, session: SessionDep, user: CurrentDoctor
+) -> CreditTopUp:
+    """Po powrocie ze Stripe: odczyt stanu sesji z API (na wypadek opóźnionego webhooka)."""
+    payment = await _payment_for(session, body.session_id)
+    if payment is None or payment.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie znaleziono płatności")
+    try:
+        checkout = await payments.retrieve_checkout(body.session_id)
+    except payments.PaymentError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+    topup = await _settle(session, checkout)
+    if topup is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie znaleziono zamówienia")
+    return topup
+
+
+@router.post("/payments/stripe/webhook", include_in_schema=False)
+async def stripe_webhook(request: Request, session: SessionDep) -> dict[str, bool]:
+    """Powiadomienia Stripe – podpis weryfikowany sekretem STRIPE_WEBHOOK_SECRET."""
+    payload = await request.body()
+    signature = request.headers.get("stripe-signature", "")
+    secret = settings.stripe_webhook_secret
+    if not secret or not payments.verify_signature(payload, signature, secret):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Nieprawidłowy podpis")
+    event = json.loads(payload)
+    kind = event.get("type", "")
+    checkout = (event.get("data") or {}).get("object") or {}
+    if kind in {
+        "checkout.session.completed",
+        "checkout.session.async_payment_succeeded",
+        "checkout.session.expired",
+    }:
+        await _settle(session, checkout)
+    elif kind == "checkout.session.async_payment_failed":
+        payment = await _payment_for(session, str(checkout.get("id")))
+        if payment is not None and payment.status == "open":
+            payment.status = "failed"
+            payment.completed_at = utcnow()
+            topup = await session.get(CreditTopUp, payment.topup_id)
+            if topup is not None and topup.status == "pending":
+                topup.status = "rejected"
+                session.add(topup)
+            session.add(payment)
+            await session.commit()
+    return {"received": True}

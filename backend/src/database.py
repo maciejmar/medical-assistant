@@ -303,6 +303,26 @@ class CreditTopUp(SQLModel, table=True):
     confirmed_by: int | None = Field(default=None)
 
 
+class PaymentSession(SQLModel, table=True):
+    """Płatność online za doładowanie (sesja Stripe Checkout). Osobna tabela zamiast kolumn
+    w credit_topups – bez migracji. Każda sesja potwierdza doładowanie co najwyżej raz."""
+
+    __tablename__ = "payment_sessions"
+
+    id: int | None = Field(default=None, primary_key=True)
+    topup_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("credit_topups.id"), index=True, nullable=False)
+    )
+    user_id: int = Field(sa_column=Column(Integer, index=True, nullable=False))
+    provider: str = Field(default="stripe", max_length=20)
+    session_id: str = Field(max_length=255, unique=True, index=True)
+    status: str = Field(default="open", max_length=20)  # open | paid | failed | expired
+    payment_method: str = Field(default="", max_length=40)
+    amount_pln: float
+    created_at: datetime = _ts()
+    completed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+
+
 class LlmCall(SQLModel, table=True):
     """Pełny zapis żądania wysłanego do LLM i otrzymanej odpowiedzi (wgląd dla administratora)."""
 

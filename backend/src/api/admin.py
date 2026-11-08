@@ -21,6 +21,7 @@ from ..database import (
     LlmCall,
     Patient,
     PatientAccount,
+    PaymentSession,
     Role,
     TokenUsage,
     User,
@@ -213,6 +214,7 @@ async def delete_user(user_id: int, session: SessionDep, admin: CurrentAdmin) ->
     await purge_patients(session, [pid for pid in patient_ids if pid is not None])
     await session.exec(delete(PatientAccount).where(col(PatientAccount.user_id) == user.id))
     await session.exec(delete(ChatMessage).where(col(ChatMessage.user_id) == user.id))
+    await session.exec(delete(PaymentSession).where(col(PaymentSession.user_id) == user.id))
     await session.exec(delete(CreditTopUp).where(col(CreditTopUp.user_id) == user.id))
     await session.exec(delete(UserSubscription).where(col(UserSubscription.user_id) == user.id))
     await session.exec(

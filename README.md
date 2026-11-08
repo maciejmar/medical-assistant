@@ -176,6 +176,15 @@ Wskaźnik wykorzystania jest w pasku nawigacji, szczegóły i doładowanie (20/5
 administrator potwierdza wpłaty w panelu. Po wyczerpaniu kredytów czat korzysta z modelu lokalnego
 (`LOCAL_LLM_BASE_URL`, np. Ollama z Gemmą) – użytkownik widzi komunikat o przejściu na tańsze modele.
 
+Płatności online (BLIK, karta, Przelewy24) obsługuje Stripe Checkout – kredyty dochodzą automatycznie po webhooku:
+
+1. Konto na https://dashboard.stripe.com (waluta PLN, włączone metody BLIK i Przelewy24 w *Settings → Payment methods*).
+2. *Developers → API keys* → klucz tajny `sk_…` → `STRIPE_SECRET_KEY`.
+3. *Developers → Webhooks → Add endpoint*: `https://logopeda-assist.webaby.io/api/payments/stripe/webhook`,
+   zdarzenia `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+   `checkout.session.async_payment_failed`, `checkout.session.expired` → sekret `whsec_…` → `STRIPE_WEBHOOK_SECRET`.
+4. Restart backendu. Najpierw klucze testowe (`sk_test_…`), potem produkcyjne.
+
 Podłączenie Ollamy działającej na serwerze w osobnym kontenerze (`gemma4`):
 
 ```bash

@@ -494,6 +494,17 @@ class PaymentDetailsOut(BaseModel):
     recipient: str
     bank_account: str
     amounts: list[float]
+    online_enabled: bool = False
+    online_methods: list[str] = []
+
+
+class CheckoutOut(BaseModel):
+    topup_id: int
+    url: str
+
+
+class CheckoutSyncIn(BaseModel):
+    session_id: str = Field(min_length=1, max_length=255)
 
 
 class MyCreditsOut(BaseModel):
