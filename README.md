@@ -168,6 +168,25 @@ silnika nie przechodzą przez `src/llm.py`, więc nie trafiają do statystyk tok
 dopisz tam zapis (`track_usage`). Koszt orientacyjny pełnego OCR ok. 1000 stron sprawdź w cenniku dostawcy przed
 uruchomieniem.
 
+## Kredyty i model zastępczy
+
+Każdy lekarz i administrator ma miesięczny limit kredytów w zł (domyślnie 20 zł, okno liczone od daty startu
+subskrypcji; zmiana w panelu administratora). Koszt = tokeny × cena modelu (USD / 1 mln) × `BILLING_USD_PLN_RATE`.
+Wskaźnik wykorzystania jest w pasku nawigacji, szczegóły i doładowanie (20/50/100 zł przelewem) na stronie `/kredyty`;
+administrator potwierdza wpłaty w panelu. Po wyczerpaniu kredytów czat korzysta z modelu lokalnego
+(`LOCAL_LLM_BASE_URL`, np. Ollama z Gemmą) – użytkownik widzi komunikat o przejściu na tańsze modele.
+
+Podłączenie Ollamy działającej na serwerze w osobnym kontenerze (`gemma4`):
+
+```bash
+docker network connect logoped-assist_logoped_net gemma4
+# w /opt/logoped-assist.env:
+LOCAL_LLM_BASE_URL=http://gemma4:11434/v1
+LOCAL_LLM_MODEL=gemma4:12b
+TOPUP_BANK_ACCOUNT=<numer konta do przelewów>
+docker compose --env-file /opt/logoped-assist.env up -d backend
+```
+
 ## Architektura
 
 | Warstwa | Opis |

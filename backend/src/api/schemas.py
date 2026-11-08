@@ -458,3 +458,63 @@ class EventOut(BaseModel):
     created_by_role: str
     editable: bool
     updated_at: datetime
+
+
+class CreditStatusOut(BaseModel):
+    started_at: datetime
+    window_start: datetime
+    window_end: datetime
+    limit_pln: float
+    topups_pln: float
+    available_pln: float
+    used_pln: float
+    remaining_pln: float
+    percent: float
+    exhausted: bool
+
+
+class TopUpOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    amount_pln: float
+    status: str
+    reference: str
+    note: str
+    created_at: datetime
+    confirmed_at: datetime | None
+
+
+class TopUpIn(BaseModel):
+    amount_pln: float = Field(gt=0, le=10000)
+
+
+class PaymentDetailsOut(BaseModel):
+    recipient: str
+    bank_account: str
+    amounts: list[float]
+
+
+class MyCreditsOut(BaseModel):
+    status: CreditStatusOut
+    topups: list[TopUpOut]
+    payment: PaymentDetailsOut
+
+
+class UserCreditsOut(BaseModel):
+    user_id: int
+    email: str
+    full_name: str
+    role: str
+    status: CreditStatusOut
+
+
+class SubscriptionPatch(BaseModel):
+    monthly_limit_pln: float | None = Field(default=None, ge=0, le=100000)
+    started_at: datetime | None = None
+
+
+class ManualTopUpIn(BaseModel):
+    amount_pln: float = Field(gt=0, le=100000)
+    note: str = Field(default="", max_length=300)

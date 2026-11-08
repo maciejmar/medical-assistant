@@ -55,7 +55,11 @@ async def transcribe_audio(
 
     raw_usage = payload.get("usage") if isinstance(payload, dict) else None
     usage = Usage()
-    if isinstance(raw_usage, dict):
+    if isinstance(raw_usage, dict) and raw_usage.get("type") == "duration":
+        # whisper-1 rozlicza czas nagrania: sekundy zapisujemy jako „tokeny wejścia” (src.billing).
+        seconds = max(1, round(float(raw_usage.get("seconds") or 0)))
+        usage = Usage(seconds, 0, seconds)
+    elif isinstance(raw_usage, dict):
         prompt = int(raw_usage.get("prompt_tokens") or raw_usage.get("input_tokens") or 0)
         completion = int(raw_usage.get("completion_tokens") or raw_usage.get("output_tokens") or 0)
         total = int(raw_usage.get("total_tokens") or 0) or prompt + completion

@@ -15,6 +15,7 @@ from sqlmodel import col, delete, select
 from ..auth import CurrentAdmin, SessionDep, hash_password
 from ..database import (
     ChatMessage,
+    CreditTopUp,
     KbDocument,
     KbPrivateDocument,
     LlmCall,
@@ -23,6 +24,7 @@ from ..database import (
     Role,
     TokenUsage,
     User,
+    UserSubscription,
     utcnow,
 )
 from ..vector_store import vector_store
@@ -211,6 +213,8 @@ async def delete_user(user_id: int, session: SessionDep, admin: CurrentAdmin) ->
     await purge_patients(session, [pid for pid in patient_ids if pid is not None])
     await session.exec(delete(PatientAccount).where(col(PatientAccount.user_id) == user.id))
     await session.exec(delete(ChatMessage).where(col(ChatMessage.user_id) == user.id))
+    await session.exec(delete(CreditTopUp).where(col(CreditTopUp.user_id) == user.id))
+    await session.exec(delete(UserSubscription).where(col(UserSubscription.user_id) == user.id))
     await session.exec(
         update(TokenUsage).where(col(TokenUsage.user_id) == user.id).values(user_id=None)
     )

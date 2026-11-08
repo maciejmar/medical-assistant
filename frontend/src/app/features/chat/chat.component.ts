@@ -10,7 +10,8 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { BillingService, EXHAUSTED_MESSAGE } from '../../core/billing.service';
 import { ChatService } from '../../core/chat.service';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 import { PatientsService } from '../../core/patients.service';
@@ -44,7 +45,7 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [FormsModule, DatePipe, MarkdownPipe],
+  imports: [FormsModule, DatePipe, MarkdownPipe, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="assistant-page">
@@ -75,6 +76,11 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
       </aside>
 
       <section class="card flex min-h-[70vh] flex-col !p-0">
+        @if (billing.mine()?.status?.exhausted) {
+          <p class="rounded-t-xl border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900" role="status">
+            {{ exhaustedMessage }} <a routerLink="/kredyty" class="font-semibold underline">Dokup kredyty</a>
+          </p>
+        }
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div class="flex items-center gap-2">
             <label class="text-xs font-semibold uppercase text-slate-500" for="patient">Pacjent</label>
@@ -182,6 +188,8 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
 })
 export class ChatComponent implements OnDestroy {
   private readonly chatApi = inject(ChatService);
+  protected readonly billing = inject(BillingService);
+  protected readonly exhaustedMessage = EXHAUSTED_MESSAGE;
   private readonly patientsApi = inject(PatientsService);
   private readonly scroller = viewChild<ElementRef<HTMLDivElement>>('scroller');
 
@@ -360,6 +368,7 @@ export class ChatComponent implements OnDestroy {
         this.patchMessage(assistantId, (m) => ({ ...m, failed: true, content: m.content || event.message }));
         break;
       case 'done':
+        this.billing.refresh();
         break;
     }
   }

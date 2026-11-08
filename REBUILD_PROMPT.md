@@ -70,6 +70,8 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `patient_plans` | patient_id (PK), include_in_context (bool, domyślnie false), updated_at |
 | `patient_plan_steps` | patient_id, position, title (≤200), description, status (`planned`/`completed`/`suspended`/`infeasible`), created_at, updated_at |
 | `patient_events` | patient_id, type (`visit`/`consultation`/`stage_start`/`stage_end`/`other`), title, starts_at, ends_at (nullable), all_day, location, description, plan_step_id (nullable, bez FK), created_by + created_by_role (`doctor`/`patient`, bez FK), created_at, updated_at |
+| `user_subscriptions` | user_id (PK), started_at (początek okien), monthly_limit_pln, updated_at; brak wiersza = data założenia konta i `BILLING_DEFAULT_LIMIT_PLN` |
+| `credit_topups` | user_id, amount_pln, status (`pending`/`confirmed`/`rejected`/`cancelled`), reference (`LOGOPED-<user>-<id>` = tytuł przelewu, ręczne `RECZNE-…`), note, created_at, confirmed_at, confirmed_by |
 | `llm_calls` | user_id, operation, model_name, request (JSON – wiadomości **po anonimizacji**), response, status, error, tokeny, duration_ms |
 | `kb_documents` | title, filename, category, audience, icd10, icd11, tags, text (pełny odczytany tekst), chunks, status (`pending`/`indexed`/`error`), error, uploaded_by, source_path (import z katalogu), content_hash, pages, created_at, indexed_at |
 | `kb_private_documents` | document_id (PK → kb_documents), owner_id (→ users) – dokument prywatny; brak wpisu = wiedza wspólna |
@@ -217,6 +219,35 @@ Konto niepowiązane z kartą → komunikat 404.
   (wiadomości wysłane do modelu i odpowiedź). Retencja `LLM_LOG_RETENTION_DAYS` (czyszczenie przy starcie).
 - **`/admin/knowledge`** – baza wiedzy RAG (sekcja 10).
 
+## 9a. Kredyty (zł), subskrypcja i model zastępczy (`src/billing.py`, `api/billing.py`)
+
+- **Przelicznik:** koszt = (tokeny wejścia × cena wejścia + tokeny wyjścia × cena wyjścia) / 1 mln × `BILLING_USD_PLN_RATE`
+  × `BILLING_MARGIN` – standard rozliczeń API (cennik dostawcy w USD za 1 mln tokenów). Cennik `DEFAULT_PRICES`
+  (gpt-4o-mini 0,15/0,60; gpt-4o 2,50/10; gpt-4.1*; text-embedding-3-small 0,02; whisper-1 – 1 „token” = 1 s nagrania,
+  100 USD/1 mln s = 0,006 USD/min), nazwy z datą wersji dopasowywane najdłuższym prefiksem, nadpisanie `BILLING_PRICES_JSON`;
+  model spoza cennika (lokalna Gemma) = 0 zł. `stt.py` zapisuje sekundy z `usage: {type: duration}` odpowiedzi Whisper.
+- **Okno:** miesięczne od `started_at` (rocznica liczona zawsze od daty startu – bez dryfu; 31. → ostatni dzień krótszego
+  miesiąca). Zużycie = suma `token_usage` użytkownika w oknie, więc limit „zeruje się” sam z początkiem nowego okna.
+  Dostępne = limit + doładowania potwierdzone w tym oknie.
+- **Po wyczerpaniu:** `llm._create_chat` → `billing.use_local_model(user_id)` (cache 30 s, `invalidate()` po zmianach)
+  kieruje czat (przepisanie zapytania i odpowiedź) do `LOCAL_LLM_BASE_URL`/`LOCAL_LLM_MODEL` (Ollama, OpenAI-compatible);
+  gdy model lokalny nie odpowiada – awaryjnie model podstawowy. Embeddingi (wymiar wektorów Qdrant) i transkrypcja
+  zostają u dostawcy. Użytkownik widzi tylko: „Wykorzystano limit kredytów – przechodzimy na tańsze modele.”
+  (`EXHAUSTED_MESSAGE`; baner w czacie i na stronie Kredyty). Bez `LOCAL_LLM_BASE_URL` – tylko ostrzeżenie.
+- **Doładowanie:** `/kredyty` – kwoty `BILLING_TOPUP_AMOUNTS` (20/50/100 zł) → zamówienie `pending` z danymi przelewu
+  (`TOPUP_RECIPIENT`, `TOPUP_BANK_ACCOUNT`, tytuł = reference), e-mail do `ADMIN_EMAIL` (w tle, jeśli SMTP), max 3
+  oczekujące, anulowanie. Admin potwierdza wpływ („Wpłata zaksięgowana”) lub odrzuca; może też doładować ręcznie.
+- **Wskaźnik:** `shared/credit-meter.component.ts` (pasek + „zużyte / dostępne zł”, kolor: brand < 75% ≤ amber < 100% ≤ red)
+  w pasku nawigacji lekarza/admina (link do `/kredyty`, odświeżany przy każdej nawigacji i po odpowiedzi czatu),
+  na stronie Kredyty i w panelu admina (`billing-admin.component.ts`: doładowania do potwierdzenia, tabela kont lekarzy
+  i adminów z wykorzystaniem, oknem, edycją limitu i daty startu subskrypcji, doładowaniem ręcznym). Pacjenci – bez wskaźnika.
+- **Ollama na serwerze:** kontener `gemma4` (ollama/ollama, modele m.in. `gemma4:12b`, CPU 8 rdzeni, bez GPU – wolne
+  odpowiedzi), współdzielony z botem `babetrade-hermes`, nasłuch w sieci `babetrade-hermes_default` i 127.0.0.1:11434 hosta.
+  Backend widzi go po podłączeniu: `docker network connect logoped-assist_logoped_net gemma4` →
+  `LOCAL_LLM_BASE_URL=http://gemma4:11434/v1`. Pomiar 2026-11-08: zimny start 204 s, generowanie ~3,9 tok/s, przetwarzanie
+  promptu ~26 tok/s (odpowiedź RAG ≈ kilka minut) – dlatego model zastępczy może też być tanim modelem w chmurze
+  (`LOCAL_LLM_BASE_URL` + `LOCAL_LLM_API_KEY` + `LOCAL_LLM_MODEL`, dowolny endpoint OpenAI-compatible).
+
 ## 10. Baza wiedzy RAG
 
 **Widoczność:** każdy materiał jest **wspólny** (dla wszystkich użytkowników, w odpowiedziach dla każdego)
@@ -287,6 +318,9 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
   `GET|POST /patients/{id}/notes`, `DELETE /patients/{id}/notes/{note_id}`, `GET /patients/{id}/chat-history`,
   `GET|PUT|DELETE /patients/{id}/account`, `GET|POST /patients/{id}/recommendations`,
   `PUT|DELETE /patients/{id}/recommendations/{rid}`, `GET|POST /patients/{id}/notifications`
+- `billing`: `GET /billing/me`, `POST /billing/topups`, `DELETE /billing/topups/{id}`; admin: `GET /admin/billing/users`,
+  `PATCH /admin/billing/users/{id}` (limit, start subskrypcji), `POST /admin/billing/users/{id}/topups` (ręczne),
+  `GET /admin/billing/topups?status_filter=`, `POST /admin/billing/topups/{id}/confirm|reject`
 - `calendar`: `GET|POST /patients/{id}/events` (`?start=&end=` ISO), `PUT|DELETE /patients/{id}/events/{eid}`;
   `GET|POST /portal/events`, `PUT|DELETE /portal/events/{eid}` (pacjent)
 - `plan`: `GET /patients/{id}/plan`, `PUT /patients/{id}/plan/settings`, `POST /patients/{id}/plan/steps`,
@@ -305,7 +339,7 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
 
 ## 12. Frontend – struktura
 
-`core/` (serwisy: auth, admin, patients, chat, portal, audio-recording, speech, interview, plan, calendar; guardy: `doctorGuard` = lekarz lub admin,
+`core/` (serwisy: auth, admin, patients, chat, portal, audio-recording, speech, interview, plan, calendar, billing; guardy: `doctorGuard` = lekarz lub admin,
 `adminGuard`, `patientGuard`, `guestGuard`; interceptor JWT z wylogowaniem przy 401),
 `features/` (auth, dashboard, patient-info + patient-care + patient-interview + patient-plan, chat, admin-panel + llm-logs + knowledge-base +
 import-progress + interview-template, patient-portal), `shared/` (modele, navbar, utils). Trasy ładowane leniwie; `homeRoute()`:
@@ -369,6 +403,9 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-08** – Kredyty w zł: przeliczanie tokenów wg cennika modeli i kursu USD/PLN, miesięczne okno subskrypcji od
+  daty startu (limit 20 zł, zerowanie z nowym oknem), wskaźnik w nawigacji i w panelu admina, doładowania 20/50/100 zł
+  przelewem z potwierdzeniem admina; po wyczerpaniu czat przechodzi na lokalną Gemmę (Ollama) z komunikatem o tańszych modelach.
 - **2026-11-08** – Kalendarz pacjenta (wizyty, konsultacje u specjalistów, początki i końce etapów terapii) – wspólny dla
   lekarza (karta pacjenta) i pacjenta (panel „Mój kalendarz”); pacjent może dodawać własne konsultacje.
 - **2026-11-08** – Odpowiedzi asystenta formatowane z Markdownu (nagłówki, listy, pogrubienia, tabele, odnośniki do źródeł)

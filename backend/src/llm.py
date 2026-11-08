@@ -26,6 +26,44 @@ client = AsyncOpenAI(
 )
 
 _background_tasks: set[asyncio.Task] = set()
+_local_client: AsyncOpenAI | None = None
+
+
+def local_client() -> AsyncOpenAI:
+    """Klient modelu zastępczego (OpenAI-compatible, np. Ollama), tworzony przy pierwszym użyciu."""
+    global _local_client
+    if _local_client is None:
+        _local_client = AsyncOpenAI(
+            base_url=settings.local_llm_base_url,
+            api_key=settings.local_llm_api_key or "local",
+            timeout=settings.local_llm_timeout_seconds,
+            max_retries=0,
+        )
+    return _local_client
+
+
+async def _chat_target(user_id: int | None) -> tuple[AsyncOpenAI, str, bool]:
+    """(klient, model, czy_lokalny): po wyczerpaniu kredytów użytkownika – model lokalny."""
+    from .billing import use_local_model  # import lokalny: billing importuje bazę i konfigurację
+
+    if await use_local_model(user_id):
+        return local_client(), settings.local_llm_model, True
+    return client, settings.vllm_chat_model, False
+
+
+async def _create_chat(user_id: int | None, operation: str, **kwargs: Any) -> tuple[Any, str]:
+    """Wywołuje model docelowy; gdy lokalny jest niedostępny – awaryjnie model podstawowy."""
+    target, model, is_local = await _chat_target(user_id)
+    try:
+        return await target.chat.completions.create(model=model, **kwargs), model
+    except Exception:
+        if not is_local:
+            raise
+        logger.exception(
+            "Model lokalny niedostępny (operacja=%s) – używam modelu podstawowego", operation
+        )
+        model = settings.vllm_chat_model
+        return await client.chat.completions.create(model=model, **kwargs), model
 
 
 @dataclass(frozen=True)
@@ -170,9 +208,10 @@ async def chat_complete(
     started = time.monotonic()
     messages = (await anonymizer_for(user_id)).messages(messages)
     try:
-        response = await client.chat.completions.create(
-            model=settings.vllm_chat_model,
-            messages=messages,  # type: ignore[arg-type]
+        response, requested_model = await _create_chat(
+            user_id,
+            operation,
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
         )
@@ -189,7 +228,7 @@ async def chat_complete(
         )
         raise
     usage = _usage_from(response.usage)
-    model_name = response.model or settings.vllm_chat_model
+    model_name = response.model or requested_model
     track_usage(user_id, model_name, operation, usage)
     text = (response.choices[0].message.content if response.choices else "") or ""
     log_call(
@@ -217,9 +256,10 @@ async def chat_stream(
     messages = (await anonymizer_for(user_id)).messages(messages)
     model_name = settings.vllm_chat_model
     try:
-        stream = await client.chat.completions.create(
-            model=settings.vllm_chat_model,
-            messages=messages,  # type: ignore[arg-type]
+        stream, model_name = await _create_chat(
+            user_id,
+            operation,
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             stream=True,

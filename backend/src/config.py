@@ -63,6 +63,21 @@ class Settings(BaseSettings):
     smtp_timeout_seconds: float = 20.0
     app_public_url: str = "http://localhost:8080"
 
+    # Kredyty (zł): koszt = tokeny × cena modelu (USD / 1 mln tokenów) × kurs USD→PLN × marża.
+    billing_default_limit_pln: float = 20.0
+    billing_usd_pln_rate: float = 3.70
+    billing_margin: float = 1.0
+    # Nadpisanie/uzupełnienie cennika: JSON {"model": [cena_wejścia, cena_wyjścia]} w USD za 1 mln.
+    billing_prices_json: str = ""
+    billing_topup_amounts: str = "20,50,100"
+    topup_bank_account: str = ""
+    topup_recipient: str = "Webaby"
+    # Model zastępczy po wyczerpaniu kredytów (OpenAI-compatible, np. Ollama: http://gemma4:11434/v1).
+    local_llm_base_url: str = ""
+    local_llm_model: str = "gemma4:12b"
+    local_llm_api_key: str = "local"  # dla taniego modelu w chmurze – klucz tego dostawcy
+    local_llm_timeout_seconds: float = 600.0
+
     seed_on_startup: bool = True
     seed_max_attempts: int = 12
 

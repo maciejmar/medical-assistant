@@ -1,11 +1,15 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { filter } from 'rxjs';
 import { AuthService } from '../core/auth.service';
+import { BillingService } from '../core/billing.service';
+import { CreditMeterComponent } from './credit-meter.component';
 
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, CreditMeterComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -45,6 +49,12 @@ import { AuthService } from '../core/auth.service';
           @if (auth.isPatient()) {
             <a routerLink="/patient" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Mój panel</a>
           }
+          @if (auth.canTreat() && billing.mine(); as credits) {
+            <a routerLink="/kredyty" class="rounded-lg px-3 py-1.5 hover:bg-slate-100 sm:ml-2" title="Kredyty – szczegóły i doładowanie" (click)="open.set(false)">
+              <span class="block text-[10px] font-semibold uppercase tracking-wide" [class]="credits.status.exhausted ? 'text-red-600' : 'text-slate-400'">Kredyty</span>
+              <app-credit-meter [status]="credits.status" [compact]="true" />
+            </a>
+          }
           <span class="px-3 py-1 text-xs text-slate-500 sm:ml-2">{{ auth.user()?.full_name }}</span>
           <button type="button" class="btn-secondary" (click)="auth.logout()">Wyloguj</button>
           <a href="https://webaby.io" target="_blank" rel="noopener noreferrer" class="px-3 py-1 sm:ml-3 sm:border-l sm:border-slate-200 sm:pl-5" aria-label="Webaby – twórca aplikacji">
@@ -57,5 +67,20 @@ import { AuthService } from '../core/auth.service';
 })
 export class NavbarComponent {
   protected readonly auth = inject(AuthService);
+  protected readonly billing = inject(BillingService);
   protected readonly open = signal(false);
+
+  constructor() {
+    // Wskaźnik kredytów odświeżany przy każdej zmianie strony (lekarz i administrator).
+    inject(Router)
+      .events.pipe(
+        filter((e) => e instanceof NavigationEnd),
+        takeUntilDestroyed(inject(DestroyRef)),
+      )
+      .subscribe(() => {
+        if (this.auth.canTreat()) {
+          this.billing.refresh();
+        }
+      });
+  }
 }

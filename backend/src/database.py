@@ -271,6 +271,38 @@ class PatientEvent(SQLModel, table=True):
     updated_at: datetime = _ts()
 
 
+class UserSubscription(SQLModel, table=True):
+    """Subskrypcja użytkownika: miesięczne okno kredytów liczone od `started_at`
+    (rocznica w kolejnych miesiącach) i limit w złotówkach. Brak wiersza = start konta,
+    limit domyślny (BILLING_DEFAULT_LIMIT_PLN)."""
+
+    __tablename__ = "user_subscriptions"
+
+    user_id: int = Field(sa_column=Column(Integer, ForeignKey("users.id"), primary_key=True))
+    started_at: datetime = Field(sa_type=DateTime(timezone=True))
+    monthly_limit_pln: float = Field(default=20.0)
+    updated_at: datetime = _ts()
+
+
+class CreditTopUp(SQLModel, table=True):
+    """Doładowanie kredytów (przelew na konto firmy). `pending` → admin potwierdza wpływ
+    (`confirmed`, kwota powiększa limit okna, w którym potwierdzono) albo odrzuca (`rejected`)."""
+
+    __tablename__ = "credit_topups"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    )
+    amount_pln: float
+    status: str = Field(default="pending", max_length=20, index=True)
+    reference: str = Field(default="", max_length=60)
+    note: str = Field(default="", max_length=300)
+    created_at: datetime = _ts(index=True)
+    confirmed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    confirmed_by: int | None = Field(default=None)
+
+
 class LlmCall(SQLModel, table=True):
     """Pełny zapis żądania wysłanego do LLM i otrzymanej odpowiedzi (wgląd dla administratora)."""
 
