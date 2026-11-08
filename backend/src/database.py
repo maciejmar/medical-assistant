@@ -243,6 +243,34 @@ class PlanStep(SQLModel, table=True):
     updated_at: datetime = _ts()
 
 
+class PatientEvent(SQLModel, table=True):
+    """Wydarzenie w kalendarzu pacjenta – wspólne dla lekarza prowadzącego i pacjenta.
+
+    type: `visit` | `consultation` | `stage_start` | `stage_end` | `other`.
+    created_by/created_by_role – autor (bez klucza obcego, żeby usunięcie konta pacjenta nie
+    blokowało usuwania; pacjent może edytować tylko własne wpisy).
+    """
+
+    __tablename__ = "patient_events"
+
+    id: int | None = Field(default=None, primary_key=True)
+    patient_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
+    )
+    type: str = Field(max_length=20)
+    title: str = Field(max_length=200)
+    starts_at: datetime = Field(sa_type=DateTime(timezone=True), index=True)
+    ends_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    all_day: bool = Field(default=False)
+    location: str = Field(default="", max_length=300)
+    description: str = Field(default="", sa_column=Column(Text, nullable=False))
+    plan_step_id: int | None = Field(default=None)
+    created_by: int | None = Field(default=None)
+    created_by_role: str = Field(default="doctor", max_length=20)
+    created_at: datetime = _ts()
+    updated_at: datetime = _ts()
+
+
 class LlmCall(SQLModel, table=True):
     """Pełny zapis żądania wysłanego do LLM i otrzymanej odpowiedzi (wgląd dla administratora)."""
 

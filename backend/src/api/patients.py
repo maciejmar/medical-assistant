@@ -11,6 +11,7 @@ from ..database import (
     InterviewItem,
     Patient,
     PatientAccount,
+    PatientEvent,
     PatientInterview,
     PatientNote,
     PatientNotification,
@@ -47,6 +48,7 @@ async def purge_patients(session: SessionDep, patient_ids: list[int]) -> None:
     if not patient_ids:
         return
     for model in (
+        PatientEvent,
         InterviewAudio,
         InterviewItem,
         PatientInterview,

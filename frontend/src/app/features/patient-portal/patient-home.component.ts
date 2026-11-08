@@ -3,13 +3,14 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { AuthService } from '../../core/auth.service';
 import { PortalService } from '../../core/portal.service';
+import { PatientCalendarComponent } from '../../shared/patient-calendar.component';
 import { PatientPortal } from '../../shared/models';
 import { ageFromBirthDate } from '../../shared/utils';
 
 @Component({
   selector: 'app-patient-home',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, PatientCalendarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="dashboard-page">
@@ -54,6 +55,9 @@ import { ageFromBirthDate } from '../../shared/utils';
               }
             </ul>
           </section>
+
+          <!-- -mt-6 znosi górny margines karty kalendarza (odstęp daje już gap siatki) -->
+          <app-patient-calendar heading="Mój kalendarz" class="-mt-6 block lg:col-span-3" />
 
           <section class="card lg:col-span-3">
             <h2 class="mb-4 font-semibold">Powiadomienia</h2>

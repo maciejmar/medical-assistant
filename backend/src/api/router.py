@@ -1,6 +1,17 @@
 from fastapi import APIRouter
 
-from . import admin, audio, auth, chat, interview, knowledge, patient_portal, patients, plan
+from . import (
+    admin,
+    audio,
+    auth,
+    calendar,
+    chat,
+    interview,
+    knowledge,
+    patient_portal,
+    patients,
+    plan,
+)
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(auth.router)
@@ -8,6 +19,7 @@ api_router.include_router(patients.router)
 api_router.include_router(patient_portal.router)
 api_router.include_router(interview.router)
 api_router.include_router(plan.router)
+api_router.include_router(calendar.router)
 api_router.include_router(chat.router)
 api_router.include_router(audio.router)
 api_router.include_router(admin.router)

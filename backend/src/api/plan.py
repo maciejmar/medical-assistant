@@ -4,10 +4,11 @@ Plan trafia do kontekstu LLM tylko, gdy lekarz włączy `include_in_context` dla
 """
 
 from fastapi import APIRouter, HTTPException, Response, status
+from sqlalchemy import update
 from sqlmodel import col, func, select
 
 from ..auth import CurrentDoctor, SessionDep
-from ..database import PatientPlan, PlanStep, utcnow
+from ..database import PatientEvent, PatientPlan, PlanStep, utcnow
 from .patients import get_owned_patient
 from .schemas import PlanOrderIn, PlanOut, PlanSettingsIn, PlanStepIn, PlanStepOut
 
@@ -119,6 +120,12 @@ async def delete_step(
 ) -> Response:
     patient = await get_owned_patient(session, patient_id, doctor)
     step = await _owned_step(session, patient.id, step_id)  # type: ignore[arg-type]
+    # Wydarzenia kalendarza powiązane z krokiem zostają, tylko bez powiązania.
+    await session.exec(
+        update(PatientEvent)
+        .where(col(PatientEvent.plan_step_id) == step.id)
+        .values(plan_step_id=None)
+    )
     await session.delete(step)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -428,3 +428,33 @@ class PlanSettingsIn(BaseModel):
 
 class PlanOrderIn(BaseModel):
     step_ids: list[int] = Field(max_length=500)
+
+
+EventType = Literal["visit", "consultation", "stage_start", "stage_end", "other"]
+
+
+class EventIn(BaseModel):
+    type: EventType
+    title: str = Field(min_length=1, max_length=200)
+    starts_at: datetime
+    ends_at: datetime | None = None
+    all_day: bool = False
+    location: str = Field(default="", max_length=300)
+    description: str = Field(default="", max_length=5000)
+    plan_step_id: int | None = None
+
+
+class EventOut(BaseModel):
+    id: int
+    type: EventType
+    title: str
+    starts_at: datetime
+    ends_at: datetime | None
+    all_day: bool
+    location: str
+    description: str
+    plan_step_id: int | None
+    plan_step_title: str | None
+    created_by_role: str
+    editable: bool
+    updated_at: datetime

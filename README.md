@@ -183,8 +183,8 @@ uruchomieniem.
 | Rola | Dostęp |
 | --- | --- |
 | `ROLE_ADMIN` | Panel administratora (`/admin`, `/admin/llm`) oraz – jak użytkownik – własni pacjenci i asystent |
-| `ROLE_DOCTOR` (w UI „Użytkownik”) | Własni pacjenci, notatki, wywiad, plan działania, zalecenia, powiadomienia, asystent |
-| `ROLE_PATIENT` | Panel pacjenta (`/patient`): rozpoznanie, zalecenia, powiadomienia – bez notatek lekarza |
+| `ROLE_DOCTOR` (w UI „Użytkownik”) | Własni pacjenci, notatki, wywiad, plan działania, kalendarz pacjenta, zalecenia, powiadomienia, asystent |
+| `ROLE_PATIENT` | Panel pacjenta (`/patient`): rozpoznanie, zalecenia, kalendarz (dodaje własne konsultacje), powiadomienia – bez notatek lekarza |
 
 ## Prywatność i bezpieczeństwo
 

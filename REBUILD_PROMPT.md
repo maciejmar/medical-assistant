@@ -69,6 +69,7 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `patient_interview_audio` | item_id (PK → items), patient_id, content_type, data (LargeBinary – nagranie w bazie, bez wolumenu), size |
 | `patient_plans` | patient_id (PK), include_in_context (bool, domyślnie false), updated_at |
 | `patient_plan_steps` | patient_id, position, title (≤200), description, status (`planned`/`completed`/`suspended`/`infeasible`), created_at, updated_at |
+| `patient_events` | patient_id, type (`visit`/`consultation`/`stage_start`/`stage_end`/`other`), title, starts_at, ends_at (nullable), all_day, location, description, plan_step_id (nullable, bez FK), created_by + created_by_role (`doctor`/`patient`, bez FK), created_at, updated_at |
 | `llm_calls` | user_id, operation, model_name, request (JSON – wiadomości **po anonimizacji**), response, status, error, tokeny, duration_ms |
 | `kb_documents` | title, filename, category, audience, icd10, icd11, tags, text (pełny odczytany tekst), chunks, status (`pending`/`indexed`/`error`), error, uploaded_by, source_path (import z katalogu), content_hash, pages, created_at, indexed_at |
 | `kb_private_documents` | document_id (PK → kb_documents), owner_id (→ users) – dokument prywatny; brak wpisu = wiedza wspólna |
@@ -76,7 +77,7 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `kb_ocr_pages` | sha256, text, confidence – pierwotna pamięć OCR Tesseracta (tylko odczyt; traktowana jak wyniki klucza `tesseract:pol+eng:c60`) |
 
 Usuwanie konta usuwa też jego prywatne materiały bazy wiedzy (wiersze i punkty w Qdrant), a w materiałach
-wspólnych zeruje `uploaded_by`. Usuwanie pacjenta (`purge_patients`) kasuje wywiad (nagrania, pytania, stan), plan działania (kroki, ustawienia), notatki, zalecenia, powiadomienia i powiązanie konta,
+wspólnych zeruje `uploaded_by`. Usuwanie pacjenta (`purge_patients`) kasuje wydarzenia kalendarza, wywiad (nagrania, pytania, stan), plan działania (kroki, ustawienia; usunięcie kroku zeruje `plan_step_id` w wydarzeniach), notatki, zalecenia, powiadomienia i powiązanie konta,
 a w `chat_history` zeruje `patient_id`. Usuwanie użytkownika robi to dla wszystkich jego pacjentów
 i zeruje `user_id` w `token_usage` i `llm_calls`.
 
@@ -166,6 +167,18 @@ krawędź 4 px ma kolor statusu (sky-400/emerald/amber/red-500); karta „+” n
   strzałki zmiany kolejności (`PUT …/plan/order` – pełna lista id), „Zapisz”/„Dodaj krok”. Przełącznik
   „Uwzględniaj plan w odpowiedziach asystenta” (`PUT …/plan/settings`) – gdy włączony, `describe_patient` dopisuje
   „Plan działania (kolejne kroki terapii):” z listą `N. nazwa – status: …` i opisem (`plan_for_context`).
+- **Kalendarz pacjenta** (wspólny komponent `shared/patient-calendar.component.ts`; w karcie pacjenta po planie działania,
+  w panelu pacjenta jako „Mój kalendarz”). Jedna tabela `patient_events` = jeden kalendarz widziany przez lekarza i pacjenta
+  (synchronizacja z definicji). Widok miesiąca (pon–niedz, `calendar-utils.ts`, czas lokalny, nazwy przez `Intl` pl-PL):
+  dzień dzisiejszy w kółku, w komórkach kafelki z ikoną typu, godziną i tytułem (na telefonie same ikony, max 3 + „+N więcej”),
+  klik dnia → lista wydarzeń dnia obok, dwuklik → nowe wydarzenie; panel „Najbliższe wydarzenia” jako oś czasu (5 pozycji).
+  Typy (ikona + etykieta + kolor pomocniczy): wizyta (`calendar-check`, brand), konsultacja u specjalisty (`hospital`, violet),
+  początek etapu (`flag`, sky), koniec etapu (`flag-fill`, amber), inne (`pin`, slate); legenda nad siatką. Okno `<dialog>`:
+  rodzaj, tytuł, data, od–do / cały dzień, miejsce, opis, a u lekarza dla etapów – powiązanie z krokiem planu działania.
+  Uprawnienia: lekarz – tylko własni pacjenci (`get_owned_patient`), pełna edycja (też wpisów pacjenta, oznaczonych „dodane przez
+  pacjenta”); pacjent – tylko swoja karta (przez `patient_accounts`), dodaje wyłącznie `consultation`/`other`, edytuje i usuwa
+  tylko własne wpisy (403), wpisy logopedy widzi w trybie tylko do odczytu. Walidacja: koniec ≥ początek (422), krok planu
+  musi należeć do pacjenta. Lista filtrowana `start` ≤ starts_at < `end` (zakres siatki), limit 1000.
 - **Konto pacjenta, zalecenia, powiadomienia** (komponent `patient-care`): utworzenie/powiązanie konta pacjenta
   (`PUT /api/patients/{id}/account` – istniejące konto musi mieć `ROLE_PATIENT` i nie być powiązane z inną kartą;
   nowe wymaga hasła), odłączenie; CRUD zaleceń z opcją „powiadom e-mailem”; wysyłka powiadomień e-mail
@@ -180,7 +193,7 @@ krawędź 4 px ma kolor statusu (sky-400/emerald/amber/red-500); karta „+” n
 
 ## 8. Panel pacjenta (`/patient`)
 
-Rozpoznanie, ICD, wiek, logopeda prowadzący (mailto), zalecenia i powiadomienia. **Bez notatek lekarza.**
+Rozpoznanie, ICD, wiek, logopeda prowadzący (mailto), zalecenia, **„Mój kalendarz”** (ten sam kalendarz co u lekarza) i powiadomienia. **Bez notatek lekarza.**
 Konto niepowiązane z kartą → komunikat 404.
 
 ## 9. Panel administratora
@@ -274,6 +287,8 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
   `GET|POST /patients/{id}/notes`, `DELETE /patients/{id}/notes/{note_id}`, `GET /patients/{id}/chat-history`,
   `GET|PUT|DELETE /patients/{id}/account`, `GET|POST /patients/{id}/recommendations`,
   `PUT|DELETE /patients/{id}/recommendations/{rid}`, `GET|POST /patients/{id}/notifications`
+- `calendar`: `GET|POST /patients/{id}/events` (`?start=&end=` ISO), `PUT|DELETE /patients/{id}/events/{eid}`;
+  `GET|POST /portal/events`, `PUT|DELETE /portal/events/{eid}` (pacjent)
 - `plan`: `GET /patients/{id}/plan`, `PUT /patients/{id}/plan/settings`, `POST /patients/{id}/plan/steps`,
   `PUT|DELETE /patients/{id}/plan/steps/{sid}`, `PUT /patients/{id}/plan/order`
 - `interview`: `GET|PUT /patients/{id}/interview`, `POST /patients/{id}/interview/approve`,
@@ -290,14 +305,14 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
 
 ## 12. Frontend – struktura
 
-`core/` (serwisy: auth, admin, patients, chat, portal, audio-recording, speech, interview, plan; guardy: `doctorGuard` = lekarz lub admin,
+`core/` (serwisy: auth, admin, patients, chat, portal, audio-recording, speech, interview, plan, calendar; guardy: `doctorGuard` = lekarz lub admin,
 `adminGuard`, `patientGuard`, `guestGuard`; interceptor JWT z wylogowaniem przy 401),
 `features/` (auth, dashboard, patient-info + patient-care + patient-interview + patient-plan, chat, admin-panel + llm-logs + knowledge-base +
 import-progress + interview-template, patient-portal), `shared/` (modele, navbar, utils). Trasy ładowane leniwie; `homeRoute()`:
 admin → `/admin`, pacjent → `/patient`, lekarz → `/dashboard`. Logo: `assets/images/logopedic-logo-384.png` (zmniejszona, docięta do koła kopia `logopedic-logo.png`, białe tło),
 Ikony: `shared/icon.component.ts` (`<app-icon name="…" [size]>`) – ścieżki SVG z Bootstrap Icons 1.11.3
 (MIT) wklejone inline (volume-up, mic, stop, pause, trash, plus, check, check-circle, pause-circle, x-circle, circle,
-arrow-left, arrow-right, close, chevron-right), `currentColor`, `aria-hidden` – opis daje przycisk;
+arrow-left, arrow-right, close, chevron-right, calendar-check, hospital, flag, flag-fill, pin, chevron-left, geo, clock, person), `currentColor`, `aria-hidden` – opis daje przycisk;
 nowe ikony kopiuj z `icons/<nazwa>.svg` paczki bootstrap-icons. Emoji nie używamy jako ikon przycisków.
 Logo wyświetlane jako okrągła plakietka (`rounded-full bg-white`) – 120 px w pasku nawigacji, 192 px na stronie logowania; obok logo w nawigacji nazwa w dwóch liniach: „Logoped” (text-2xl, pogrubione)
 i pod nim „Assistant” (text-sm).
@@ -342,7 +357,8 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 - Backend: `cd backend && uv run ruff check src tests && uv run ruff format --check src tests && uv run pytest -q`
   (conftest: SQLite w katalogu tymczasowym, fikstury `client`, `make_headers`, `fake_index` – podstawione
   embeddingi i Qdrant). Testy obejmują: izolację danych między lekarzami, role, admina, portal pacjenta,
-  plan działania (CRUD, kolejność, izolacja, kontekst LLM tylko po włączeniu, usuwanie z pacjentem), wywiad (szablon, migawka zatwierdzenia w kontekście LLM, nagrania i transkrypcja, izolacja, usuwanie z pacjentem), anonimizację (odmiany, płeć, wzorce, zachowanie treści klinicznej, zapis do logu), RAG (parser, filtry,
+  kalendarz (wspólny widok lekarz–pacjent, uprawnienia pacjenta, izolacja między lekarzami i pacjentami, zakres dat, walidacja,
+powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LLM tylko po włączeniu, usuwanie z pacjentem), wywiad (szablon, migawka zatwierdzenia w kontekście LLM, nagrania i transkrypcja, izolacja, usuwanie z pacjentem), anonimizację (odmiany, płeć, wzorce, zachowanie treści klinicznej, zapis do logu), RAG (parser, filtry,
   źródła, fallback trafności), bazę wiedzy (formaty, skany, chunking, OCR – logika linii i orientacji,
   sesje, duplikaty, bezpieczeństwo ścieżek, idempotencja, ponawianie, postęp).
 - Frontend: `npx ng test --watch=false --browsers=ChromeHeadlessNoSandbox && npx ng build`.
@@ -353,6 +369,8 @@ Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/op
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-08** – Kalendarz pacjenta (wizyty, konsultacje u specjalistów, początki i końce etapów terapii) – wspólny dla
+  lekarza (karta pacjenta) i pacjenta (panel „Mój kalendarz”); pacjent może dodawać własne konsultacje.
 - **2026-11-08** – Odpowiedzi asystenta formatowane z Markdownu (nagłówki, listy, pogrubienia, tabele, odnośniki do źródeł)
   zamiast surowych znaków `#` i `*`.
 - **2026-11-07** – Karty kroków planu na lekko beżowym tle (białe zlewały się z sekcją); status – kolor lewej krawędzi i ikona.
