@@ -91,7 +91,7 @@ function apiError(err: unknown, fallback: string): string {
                 role="button"
                 tabindex="0"
                 class="group min-h-[4.5rem] cursor-pointer border-t border-slate-200 p-1 text-left transition hover:bg-brand-50/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 sm:min-h-[6.5rem] sm:p-1.5 [&:not(:nth-child(7n+1))]:border-l"
-                [class.bg-slate-50]="day.getMonth() !== month().getMonth()"
+                [class.cal-outside]="day.getMonth() !== month().getMonth()"
                 [class.!bg-brand-50]="key(day) === selectedKey()"
                 (click)="selectDay(day)"
                 (keydown.enter)="selectDay(day)"
@@ -100,7 +100,7 @@ function apiError(err: unknown, fallback: string): string {
               >
                 <span
                   class="mb-1 grid h-6 w-6 place-items-center rounded-full text-xs"
-                  [class]="key(day) === todayKey ? 'bg-brand-600 font-bold text-white' : day.getMonth() === month().getMonth() ? 'font-medium text-slate-700' : 'text-slate-400'"
+                  [class]="key(day) === todayKey ? 'bg-brand-600 font-bold text-white' : day.getMonth() === month().getMonth() ? 'font-medium text-slate-700' : 'cal-outside-number'"
                 >{{ day.getDate() }}</span>
                 @for (e of eventsOn(day).slice(0, maxInCell); track e.id) {
                   <button

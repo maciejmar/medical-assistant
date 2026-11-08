@@ -149,3 +149,11 @@ body {
     @apply ml-0.5 inline-block rounded bg-brand-50 px-1 align-super text-[0.7em] font-semibold leading-none text-brand-700;
   }
 }
+
+/* Kalendarz: dni spoza bieżącego miesiąca – szaroniebieskie tło i numer dnia. */
+.cal-outside {
+  background-color: #e3e9f1;
+}
+.cal-outside-number {
+  color: #7a8aa3;
+}

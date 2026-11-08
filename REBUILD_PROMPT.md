@@ -172,6 +172,7 @@ krawędź 4 px ma kolor statusu (sky-400/emerald/amber/red-500); karta „+” n
 - **Kalendarz pacjenta** (wspólny komponent `shared/patient-calendar.component.ts`; w karcie pacjenta po planie działania,
   w panelu pacjenta jako „Mój kalendarz”). Jedna tabela `patient_events` = jeden kalendarz widziany przez lekarza i pacjenta
   (synchronizacja z definicji). Widok miesiąca (pon–niedz, `calendar-utils.ts`, czas lokalny, nazwy przez `Intl` pl-PL):
+  dni spoza bieżącego miesiąca szaroniebieskie (`.cal-outside` tło `#e3e9f1`, `.cal-outside-number` `#7a8aa3` w `styles.css`),
   dzień dzisiejszy w kółku, w komórkach kafelki z ikoną typu, godziną i tytułem (na telefonie same ikony, max 3 + „+N więcej”),
   klik dnia → lista wydarzeń dnia obok, dwuklik → nowe wydarzenie; panel „Najbliższe wydarzenia” jako oś czasu (5 pozycji).
   Typy (ikona + etykieta + kolor pomocniczy): wizyta (`calendar-check`, brand), konsultacja u specjalisty (`hospital`, violet),
@@ -403,6 +404,7 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-08** – Kalendarz: dni spoza bieżącego miesiąca na szaroniebieskim tle.
 - **2026-11-08** – Kredyty w zł: przeliczanie tokenów wg cennika modeli i kursu USD/PLN, miesięczne okno subskrypcji od
   daty startu (limit 20 zł, zerowanie z nowym oknem), wskaźnik w nawigacji i w panelu admina, doładowania 20/50/100 zł
   przelewem z potwierdzeniem admina; po wyczerpaniu czat przechodzi na lokalną Gemmę (Ollama) z komunikatem o tańszych modelach.
