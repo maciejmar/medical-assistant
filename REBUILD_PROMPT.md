@@ -240,8 +240,8 @@ Konto niepowiązane z kartą → komunikat 404.
   (`TOPUP_RECIPIENT`, `TOPUP_BANK_ACCOUNT`, tytuł = reference), e-mail do `ADMIN_EMAIL` (w tle, jeśli SMTP), max 3
   oczekujące, anulowanie. Admin potwierdza wpływ („Wpłata zaksięgowana”) lub odrzuca; może też doładować ręcznie.
 - **Płatność online (`src/payments.py`, Stripe Checkout przez httpx, bez SDK):** `POST /billing/checkout` tworzy
-  zamówienie (`note="online"`) i sesję Checkout w PLN (`payment_method_types` z `STRIPE_PAYMENT_METHODS`: blik, card, p24;
-  `locale=pl`, `client_reference_id`/`metadata` = reference/topup_id, wygasa po 31 min), frontend przekierowuje na `url`.
+  zamówienie (`note="online"`) i sesję Checkout w PLN – **bez `payment_method_types`** (API Stripe od 2026-10-28 odrzuca
+  ten parametr; metody wybiera panel *Settings → Payment methods*, `STRIPE_PAYMENT_METHODS` to tylko opis w UI); `locale=pl`, `client_reference_id`/`metadata` = reference/topup_id, wygasa po 31 min), frontend przekierowuje na `url`.
   Webhook `POST /api/payments/stripe/webhook` – podpis `Stripe-Signature` (HMAC-SHA256 z `t.payload`, tolerancja 300 s,
   `STRIPE_WEBHOOK_SECRET`): `checkout.session.completed`/`async_payment_succeeded` z `payment_status=paid` i zgodną kwotą
   → zamówienie `confirmed` (idempotentnie – sesja rozliczana raz), `expired` → `cancelled`, `async_payment_failed` →
@@ -416,6 +416,8 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-08** – Stripe: sesje Checkout bez `payment_method_types` (nowe API go odrzuca – metody z panelu Stripe);
+  sprawdzone na sandboxie: sesja PLN z BLIK/kartą/P24, webhook z poprawnym podpisem → 200.
 - **2026-11-08** – Płatności online za kredyty: Stripe Checkout (BLIK, karta, Przelewy24), automatyczne doliczenie po
   webhooku i synchronizacja po powrocie; przelew tradycyjny zostaje jako opcja.
 - **2026-11-08** – Kalendarz: dni spoza bieżącego miesiąca na szaroniebieskim tle.

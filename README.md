@@ -178,7 +178,8 @@ administrator potwierdza wpłaty w panelu. Po wyczerpaniu kredytów czat korzyst
 
 Płatności online (BLIK, karta, Przelewy24) obsługuje Stripe Checkout – kredyty dochodzą automatycznie po webhooku:
 
-1. Konto na https://dashboard.stripe.com (waluta PLN, włączone metody BLIK i Przelewy24 w *Settings → Payment methods*).
+1. Konto na https://dashboard.stripe.com; w *Settings → Payment methods* włącz BLIK i Przelewy24, wyłącz zbędne
+   (np. Klarna) – Checkout pokazuje wszystkie włączone metody obsługujące PLN (API nie przyjmuje już listy metod).
 2. *Developers → API keys* → klucz tajny `sk_…` → `STRIPE_SECRET_KEY`.
 3. *Developers → Webhooks → Add endpoint*: `https://logopeda-assist.webaby.io/api/payments/stripe/webhook`,
    zdarzenia `checkout.session.completed`, `checkout.session.async_payment_succeeded`,

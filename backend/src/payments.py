@@ -30,6 +30,9 @@ def is_configured() -> bool:
 
 
 def payment_methods() -> list[str]:
+    """Metody pokazywane użytkownikowi w opisie przycisku. Same metody płatności Stripe wybiera
+    według ustawień w panelu (Settings → Payment methods) – API od wersji 2026-10 nie przyjmuje
+    już `payment_method_types` przy tworzeniu sesji Checkout."""
     return [m.strip() for m in settings.stripe_payment_methods.split(",") if m.strip()]
 
 
@@ -76,8 +79,6 @@ async def create_checkout(
         # Porzucona płatność wygasa po 30 min (minimum Stripe) – zamówienie zostaje anulowane.
         "expires_at": str(int(time.time()) + 31 * 60),
     }
-    for index, method in enumerate(payment_methods()):
-        data[f"payment_method_types[{index}]"] = method
     return await _request("POST", "/checkout/sessions", data)
 
 

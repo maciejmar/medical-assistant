@@ -93,7 +93,9 @@ async def test_blik_payment_confirms_credits_automatically(client, stripe, make_
     _, _, data = stripe["requests"][0]
     assert data["line_items[0][price_data][unit_amount]"] == "5000"
     assert data["line_items[0][price_data][currency]"] == "pln"
-    assert [data[f"payment_method_types[{i}]"] for i in range(3)] == ["blik", "card", "p24"]
+    assert not any(k.startswith("payment_method_types") for k in data), (
+        "metody wybiera panel Stripe"
+    )
     assert "session_id={CHECKOUT_SESSION_ID}" in data["success_url"]
 
     # Oczekująca płatność online nie trafia do listy przelewów admina.

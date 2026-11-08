@@ -75,7 +75,9 @@ class Settings(BaseSettings):
     # Płatności online (Stripe Checkout: BLIK, karta, Przelewy24); puste klucze = tylko przelew.
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
-    stripe_payment_methods: str = "blik,card,p24"
+    stripe_payment_methods: str = (
+        "blik,card,p24"  # tylko opis w UI; metody włącza się w panelu Stripe
+    )
     stripe_api_url: str = "https://api.stripe.com/v1"
     # Model zastępczy po wyczerpaniu kredytów (OpenAI-compatible, np. Ollama: http://gemma4:11434/v1).
     local_llm_base_url: str = ""
