@@ -63,7 +63,7 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `patient_accounts` | patient_id (unique) ↔ user_id (unique) – powiązanie karty z kontem pacjenta |
 | `patient_recommendations` | user_id, patient_id, title, content, created_at, updated_at |
 | `patient_notifications` | user_id, patient_id, recipient, subject, body, status (`sent`/`failed`), error |
-| `interview_templates` | id=1 (jeden wiersz), questions (JSON – lista pytań), updated_by, updated_at; brak wiersza = `DEFAULT_QUESTIONS` z `api/interview.py` |
+| `interview_templates` | id=1 (jeden wiersz), questions (JSON – lista pytań, „## ” = nagłówek sekcji), updated_by, updated_at; brak wiersza = domyślny szablon z pliku `src/interview_template.txt` |
 | `patient_interviews` | patient_id (PK), user_id, status (`draft`/`approved`), approved_items (JSON – migawka [{question, answer}] z chwili zatwierdzenia), approved_at |
 | `patient_interview_items` | patient_id, position, question, answer, created_at, updated_at |
 | `patient_interview_audio` | item_id (PK → items), patient_id, content_type, data (LargeBinary – nagranie w bazie, bez wolumenu), size |
@@ -155,9 +155,16 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
   ikona głośnika – odsłuch nagrania (w trakcie: pauza) (blob przez HttpClient z JWT → `Audio`), usuwanie nagrania. „Zapisz szkic” (`PUT …/interview`)
   i „Zatwierdź” (`POST …/interview/approve`) – zatwierdzenie zapisuje migawkę `approved_items`. Status `approved` tylko,
   gdy treść = migawka (poprawka po zatwierdzeniu → `draft`, cofnięcie → znów `approved`); znacznik „Niezapisane zmiany”.
+  Szablon domyślny: `backend/src/interview_template.txt` (formularz „Wywiad logopedyczny i ocena anatomiczno-funkcjonalna –
+  pierwsza konsultacja dziecka”, 11 sekcji + pytania dodatkowe, badanie 9A–9G, podsumowanie, zalecenia; ~90 pytań),
+  jedno pytanie w wierszu, `## ` = nagłówek sekcji, `# ` = komentarz; pola wyboru z formularza jako opcje w nawiasie
+  („(siłami natury / cesarskie cięcie planowane / …)”); imię, nazwisko i data urodzenia pominięte (są w karcie pacjenta).
+  Nagłówki w tabeli – wiersz sekcji bez pola odpowiedzi i nagrywania, numeracja pytań pomija sekcje. „Wczytaj aktualny
+  szablon” (`POST …/interview/reset`) zastępuje pytania (usuwa odpowiedzi i nagrania; zatwierdzona migawka zostaje do
+  ponownego zatwierdzenia).
   **Do LLM trafia wyłącznie zatwierdzona migawka**: `describe_patient(patient, interview)` dopisuje sekcję
   „Wywiad z pacjentem / opiekunem (zatwierdzony przez lekarza):” z parami `- pytanie / Odpowiedź: …` (tylko pytania
-  z odpowiedzią), dzięki czemu wywiad trafia też do kroku przepisywania zapytania; `ANSWER_SYSTEM` każe odnosić
+  z odpowiedzią), pogrupowanymi nagłówkami `[sekcja]` (tylko sekcje z co najmniej jedną odpowiedzią), dzięki czemu wywiad trafia też do kroku przepisywania zapytania; `ANSWER_SYSTEM` każe odnosić
   zalecenia do wywiadu i cytować fakty o pacjencie jako „(wywiad)”/„(opis pacjenta)”, nie numerem źródła.
   Anonimizacja jak dla reszty kontekstu (centralnie w `src/llm.py`).
 - **Plan działania** (komponent `patient-plan`, między wywiadem a zaleceniami): poziomy diagram (`<ol>` z przewijaniem
@@ -338,7 +345,7 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
   `GET|POST /portal/events`, `PUT|DELETE /portal/events/{eid}` (pacjent)
 - `plan`: `GET /patients/{id}/plan`, `PUT /patients/{id}/plan/settings`, `POST /patients/{id}/plan/steps`,
   `PUT|DELETE /patients/{id}/plan/steps/{sid}`, `PUT /patients/{id}/plan/order`
-- `interview`: `GET|PUT /patients/{id}/interview`, `POST /patients/{id}/interview/approve`,
+- `interview`: `GET|PUT /patients/{id}/interview`, `POST /patients/{id}/interview/approve`, `POST /patients/{id}/interview/reset`,
   `POST /patients/{id}/interview/items`, `DELETE /patients/{id}/interview/items/{iid}`,
   `GET|PUT|DELETE /patients/{id}/interview/items/{iid}/audio` (PUT multipart `audio`, walidacja jak `/audio/transcribe`
   – wspólna funkcja `read_audio_upload`); `GET|PUT|DELETE /admin/interview-template` (tylko admin)
@@ -416,6 +423,8 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-09** – Nowy szablon wywiadu z prawdziwego formularza pierwszej konsultacji (sekcje `## `, plik
+  `src/interview_template.txt`), nagłówki sekcji w tabeli i w kontekście LLM, przycisk „Wczytaj aktualny szablon”.
 - **2026-11-08** – Stripe: sesje Checkout bez `payment_method_types` (nowe API go odrzuca – metody z panelu Stripe);
   sprawdzone na sandboxie: sesja PLN z BLIK/kartą/P24, webhook z poprawnym podpisem → 200.
 - **2026-11-08** – Płatności online za kredyty: Stripe Checkout (BLIK, karta, Przelewy24), automatyczne doliczenie po

@@ -5,6 +5,7 @@ Do kontekstu LLM trafia wyłącznie ostatnia ZATWIERDZONA wersja wywiadu (migawk
 patient_interviews.approved_items); anonimizację imion, PESEL-u, telefonu i adresu robi src.llm.
 """
 
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
@@ -34,24 +35,27 @@ from .schemas import (
 
 router = APIRouter(tags=["interview"])
 
-DEFAULT_QUESTIONS: list[str] = [
-    "Z jakim problemem pacjent zgłasza się do gabinetu?",
-    "Kiedy zauważono pierwsze trudności i jak zmieniały się one w czasie?",
-    "Przebieg ciąży i porodu (tydzień porodu, rodzaj porodu, punktacja Apgar, komplikacje).",
-    "Rozwój ruchowy: w jakim wieku pacjent siadał, raczkował, zaczął chodzić?",
-    "Rozwój mowy: głużenie, gaworzenie, pierwsze słowa, pierwsze zdania – w jakim wieku?",
-    "Karmienie: pierś/butelka, smoczek, gryzienie i żucie pokarmów stałych, picie z kubka.",
-    "Oddychanie: przez nos czy przez usta, chrapanie, pozycja języka i warg w spoczynku.",
-    "Słuch: wyniki badań słuchu, częste infekcje i zapalenia uszu.",
-    "Choroby, operacje i hospitalizacje (np. migdałki, wędzidełko), przyjmowane leki.",
-    "Zgryz i nawyki: leczenie ortodontyczne, ssanie palca, obgryzanie paznokci.",
-    "Czy w rodzinie występowały zaburzenia mowy, słuchu lub trudności w nauce?",
-    "Środowisko językowe: języki używane w domu, przedszkole/szkoła, kontakt z rówieśnikami.",
-    "Lateralizacja: ręka dominująca (oraz oko, noga, jeśli znane).",
-    "Dotychczasowa diagnostyka i terapia (logopeda, psycholog, SI, neurolog) i jej efekty.",
-    "Funkcjonowanie emocjonalne i społeczne; jak pacjent reaguje na własne trudności?",
-    "Oczekiwania pacjenta / rodziny wobec terapii.",
-]
+SECTION_PREFIX = "## "
+TEMPLATE_FILE = Path(__file__).resolve().parent.parent / "interview_template.txt"
+
+
+def load_default_questions(path: Path = TEMPLATE_FILE) -> list[str]:
+    """Domyślny szablon z pliku tekstowego: jedno pytanie w wierszu, „## ” = nagłówek sekcji,
+    „# ” = komentarz, puste wiersze pomijane."""
+    questions = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = " ".join(raw.split())
+        if not line or (line.startswith("# ") and not line.startswith(SECTION_PREFIX)):
+            continue
+        questions.append(line)
+    return questions
+
+
+def is_section(question: str) -> bool:
+    return question.startswith(SECTION_PREFIX)
+
+
+DEFAULT_QUESTIONS: list[str] = load_default_questions()
 
 _TEMPLATE_ID = 1
 
@@ -269,6 +273,32 @@ async def add_question(
     return _item_out(item, set())
 
 
+@router.post("/patients/{patient_id}/interview/reset", response_model=InterviewOut)
+async def reset_interview(
+    patient_id: int, session: SessionDep, doctor: CurrentDoctor
+) -> InterviewOut:
+    """Zastępuje pytania (wraz z odpowiedziami i nagraniami) aktualnym szablonem.
+    Zatwierdzona wersja w kontekście asystenta zostaje do czasu ponownego zatwierdzenia."""
+    patient = await get_owned_patient(session, patient_id, doctor)
+    interview = await _interview(session, patient.id, doctor)  # type: ignore[arg-type]
+    await session.exec(
+        delete(InterviewAudio).where(col(InterviewAudio.patient_id) == interview.patient_id)
+    )
+    await session.exec(
+        delete(InterviewItem).where(col(InterviewItem.patient_id) == interview.patient_id)
+    )
+    questions, _ = await template_questions(session)
+    for position, question in enumerate(questions):
+        session.add(
+            InterviewItem(patient_id=interview.patient_id, position=position, question=question)
+        )
+    interview.status = "draft"
+    interview.updated_at = utcnow()
+    session.add(interview)
+    await session.commit()
+    return await _out(session, interview)
+
+
 @router.delete(
     "/patients/{patient_id}/interview/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT
 )
@@ -370,12 +400,26 @@ async def delete_recording(
 
 
 async def approved_interview(session: SessionDep, patient_id: int) -> list[dict[str, str]]:
-    """Zatwierdzone pary pytanie–odpowiedź (tylko z odpowiedzią) do kontekstu LLM."""
+    """Zatwierdzone pary pytanie–odpowiedź (tylko z odpowiedzią) do kontekstu LLM.
+
+    Nagłówki sekcji („## …”) zostają tylko wtedy, gdy w sekcji jest choć jedna odpowiedź –
+    zwracane jako {"section": tytuł}, żeby model widział strukturę formularza.
+    """
     interview = await session.get(PatientInterview, patient_id)
     if interview is None or not interview.approved_items:
         return []
-    return [
-        {"question": str(e.get("question", "")), "answer": str(e.get("answer", ""))}
-        for e in interview.approved_items
-        if str(e.get("answer", "")).strip()
-    ]
+    result: list[dict[str, str]] = []
+    pending_section: str | None = None
+    for entry in interview.approved_items:
+        question = str(entry.get("question", ""))
+        answer = str(entry.get("answer", "")).strip()
+        if is_section(question):
+            pending_section = question[len(SECTION_PREFIX) :].strip()
+            continue
+        if not answer:
+            continue
+        if pending_section is not None:
+            result.append({"section": pending_section})
+            pending_section = None
+        result.append({"question": question, "answer": answer})
+    return result

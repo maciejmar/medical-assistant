@@ -1,0 +1,124 @@
+# Domyślny szablon wywiadu logopedycznego (formularz pierwszej konsultacji dziecka).
+# Jedno pytanie w wierszu; wiersz zaczynający się od „## ” to nagłówek sekcji.
+# Wiersze zaczynające się od pojedynczego „# ” (z odstępem) oraz puste – pomijane.
+# Administrator może nadpisać szablon w panelu (/admin → Szablon wywiadu).
+
+## 1. Powód zgłoszenia
+Osoba zgłaszająca / relacja z dzieckiem
+Co niepokoi Państwa w mowie, komunikacji lub zachowaniu dziecka? (główny powód konsultacji)
+
+## 2. Przebieg ciąży i porodu
+Jak przebiegała ciąża? Czy występowały infekcje? Przyjmowane leki?
+W którym tygodniu odbył się poród? (poród o czasie / wcześniactwo – tydzień)
+Jaki był rodzaj porodu? (siłami natury / cesarskie cięcie planowane / cesarskie cięcie nagłe)
+Jaki był stan dziecka po urodzeniu? (Apgar, masa urodzeniowa, niedotlenienie, inkubator itp.)
+
+## 3. Rozwój psychoruchowy i somatyczny
+Kiedy dziecko zaczęło stabilnie siedzieć?
+Kiedy zaczęło samodzielnie chodzić?
+Czy dziecko raczkowało? Jeśli tak, jak długo?
+Jak wygląda ogólna sprawność ruchowa? Czy dziecko często się potyka lub ma trudności z czynnościami precyzyjnymi?
+Dla starszych dzieci: czy występują trudności z koordynacją, sprawnością manualną, grafomotoryką lub wykonywaniem sekwencji ruchowych?
+Czy dziecko często choruje, szczególnie na infekcje górnych dróg oddechowych lub zapalenia uszu?
+Dla starszych dzieci: czy występuje przewlekły katar, zatkany nos, chrapanie lub oddychanie przez usta?
+Czy stwierdzono inne schorzenia, alergie lub zaburzenia, np. napięcia mięśniowego?
+
+## 4. Karmienie oraz funkcje gryzienia i połykania
+Jak dziecko było karmione w niemowlęctwie? (pierś / butelka / inne) Jak długo?
+Jak przebiegało rozszerzanie diety? Czy występowało krztuszenie lub nasilony odruch wymiotny?
+Jak dziecko radzi sobie obecnie z pokarmami stałymi? Czy chętnie gryzie i żuje twardsze pokarmy?
+Dla starszych dzieci: czy występują trudności z gryzieniem, żuciem, połykaniem lub określonymi konsystencjami pokarmów?
+Czy występuje nadmierne ślinienie się?
+Jak dziecko pije? (kubek otwarty / bidon ze słomką / butelka z dzióbkiem / kubek niekapek / inne)
+Czy dziecko ssie palec, smoczek lub stale trzyma w buzi kocyk albo zabawki?
+Czy występują zaparcia, połykanie zbyt dużych kęsów bez odpowiedniej obróbki pokarmowej?
+Czy jest potrzeba popijania podczas jedzenia, np. w celu ułatwienia rozdrobnienia lub połknięcia pokarmu?
+Czy występuje wzmożony odruch wymiotny, np. podczas jedzenia, mycia zębów lub kontaktu z określonymi pokarmami?
+
+## 5. Słuch i reakcje słuchowe
+Czy wykonano przesiewowe badanie słuchu w szpitalu? Jaki był wynik?
+Czy dziecko reaguje na swoje imię?
+Czy rozumie proste polecenia poparte gestem, np. „daj misia”, „chodź tu”?
+Czy rozumie proste polecenia bez gestu?
+Dla starszych dzieci: czy dziecko rozumie dłuższe i bardziej złożone polecenia, np. składające się z 2–3 etapów?
+
+## 6. Rozwój mowy i komunikacji
+Czy dziecko głużyło i gaworzyło w 1. roku życia? (np. ba-ba, ma-ma)
+Ile słów, również uproszczonych, dziecko obecnie świadomie wypowiada?
+Czy dziecko łączy dwa wyrazy? Jeśli tak, proszę podać przykład.
+W jaki sposób dziecko komunikuje, że czegoś chce? (słowa / gesty / wskazywanie / płacz / krzyk / prowadzenie dorosłego / inne)
+Czy dziecko naśladuje dźwięki z otoczenia, np. odgłosy zwierząt lub pojazdów?
+Czy dziecko komunikuje się pojedynczymi wyrazami czy zdaniami?
+Dla starszych dzieci: czy dziecko potrafi powtórzyć dłuższe wyrazy i zdania oraz zachować ich kolejność?
+Dla starszych dzieci: czy występują trudności z budowaniem zdań, odmianą wyrazów, doborem słów lub opowiadaniem?
+Dla starszych dzieci: czy dziecko wypowiada się pełnymi zdaniami i potrafi samodzielnie opowiedzieć o wydarzeniu, obrazku lub historii?
+
+## 7. Kontakt społeczny, zabawa i zachowanie
+Czy dziecko nawiązuje kontakt wzrokowy podczas rozmowy i zabawy?
+Czy używa gestu wskazywania palcem, aby coś pokazać i dzielić uwagę z dorosłym?
+Jak wygląda zabawa? Czy dziecko bawi się funkcjonalnie (jeździ autkiem, karmi misia), czy raczej układa przedmioty w rzędy / kręci kółkami?
+Czy dziecko chętnie bawi się z dorosłymi i interesuje się innymi dziećmi?
+Dla starszych dzieci: jak dziecko funkcjonuje w relacjach z rówieśnikami? Czy łatwo nawiązuje rozmowę, podtrzymuje temat i rozumie zasady rozmowy?
+
+## 8. Środowisko i stymulacja rozwoju
+W jakim języku lub językach mówi się w domu? Czy dziecko jest dwujęzyczne?
+Dla starszych dzieci: w jakich językach dziecko komunikuje się na co dzień i czy poziom swobody wypowiedzi różni się między językami?
+Ile czasu dziennie dziecko spędza przed ekranami? (telewizor / telefon / tablet / zabawki z ekranem)
+Czy telewizor lub bajki są włączone w tle podczas innych aktywności dziecka?
+
+## Pytania dodatkowe przed pierwszą wizytą – szczególnie u młodszych dzieci
+Czy dwulatek posługuje się gestem wskazywania palcem?
+Ile słów lub dźwięków naśladowczych dziecko wypowiada obecnie?
+Czy zauważają Państwo trudności z odgryzaniem lub żuciem pokarmów?
+
+## 9A. Badanie: budowa i sprawność aparatu artykulacyjnego
+Wędzidełko podjęzykowe – budowa (prawidłowe / skrócone lekkie / skrócone umiarkowane / skrócone znaczne / inny typ, ankyloglosja)
+Ruchomość języka – czy język unosi się do wałka dziąsłowego?
+Ruchomość języka – czy przy wysuwaniu na brodę tworzy się sercowate wcięcie?
+Ruchomość języka – czy występuje pociąganie dna jamy ustnej?
+Wędzidełko wargi górnej (prawidłowe / przerosłe / ogranicza ruchomość wargi)
+Podniebienie (prawidłowo wysklepione / wysokie, wąskie – gotyckie / podejrzenie rozszczepu – widoczny lub podśluzówkowy)
+Zgryz i uzębienie (uzębienie mleczne kompletne / niekompletne / zgryz otwarty / tyłozgryz / przodozgryz / inne)
+Migdałki podniebienne (w normie / powiększone)
+
+## 9B. Badanie: pozycja spoczynkowa
+Wargi (zwarte / stale półotwarte / otwarte – podejrzenie oddychania przez usta)
+Język (spoczywa na podniebieniu / leży na dnie jamy ustnej / napiera na dolne zęby / wsuwany między zęby)
+Tor oddechowy (nosowy / ustny / mieszany)
+
+## 9C. Badanie: funkcje prymarne
+Połykanie (prawidłowe, dojrzałe / nieprawidłowe, infantylne) – obserwacje
+Gryzienie i żucie – ruchy żuchwy (pionowe / rotacyjne / mieszane)
+Gryzienie i żucie – strona żucia (obustronne / głównie prawa / głównie lewa) – obserwacje
+
+## 9D. Badanie: podniebienie miękkie i języczek
+Budowa języczka (prawidłowy / skrócony / wydłużony / rozszczepiony – uvula bifida)
+Ruchomość podniebienia miękkiego (prawidłowa i symetryczna / ograniczona, leniwa / asymetryczna) – obserwacje
+Rezonans (brak nosowania / nosowanie otwarte / nosowanie zamknięte)
+
+## 9E. Badanie: wrażliwość i odruchy
+Odruch wymiotny (prawidłowy / wzmożony, hiperwrażliwość / osłabiony, zniesiony) – obserwacje
+
+## 9F. Badanie: żuchwa – pozycja, ruchomość i stabilizacja
+Pozycja spoczynkowa / budowa żuchwy (prawidłowa / retrogenia / progenia / asymetria)
+Zakres otwierania ust (prawidłowy / ograniczony)
+Kierunek ruchu przy otwieraniu i zamykaniu (płynny, prosty / zbaczanie w bok / ruch esowaty, zygzakowaty)
+Ruchy boczne żuchwy (obecne / ograniczone w prawo / ograniczone w lewo / brak, znaczne ograniczenie)
+Stabilizacja żuchwy (prawidłowa / niewystarczająca)
+Dysocjacja języka i żuchwy (obecna, rozwijająca się adekwatnie do wieku / brak, wyraźnie ograniczona) – obserwacje
+Praca żuchwy podczas odgryzania i żucia (pionowa / rotacyjna, okrężna / mieszana) – obserwacje
+Praca żuchwy podczas mowy / wokalizacji (adekwatna / zbyt szeroka / nadmierne „kłapanie”) – obserwacje
+
+## 9G. Badanie: artykulacja i realizacja dźwięków
+Obserwacje / próby artykulacyjne
+
+## 10. Podsumowanie badania
+Najważniejsze obserwacje
+Wstępne wnioski funkcjonalne
+Obszary wymagające dalszej diagnostyki / konsultacji
+Priorytety terapeutyczne
+
+## 11. Dalsze zalecenia
+Zalecenia do pracy w domu
+Zalecane konsultacje / badania dodatkowe
+Termin kolejnej wizyty

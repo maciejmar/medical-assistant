@@ -66,7 +66,11 @@ def describe_patient(
         lines.append(f"Opis: {patient.description}")
     if interview:
         lines.append("Wywiad z pacjentem / opiekunem (zatwierdzony przez lekarza):")
-        lines.extend(f"- {e['question']}\n  Odpowiedź: {e['answer']}" for e in interview)
+        for entry in interview:
+            if "section" in entry:
+                lines.append(f"[{entry['section']}]")
+            else:
+                lines.append(f"- {entry['question']}\n  Odpowiedź: {entry['answer']}")
     if plan:
         lines.append("Plan działania (kolejne kroki terapii):")
         for number, step in enumerate(plan, start=1):

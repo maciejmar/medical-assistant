@@ -75,3 +75,31 @@ describe('PatientInterviewComponent', () => {
     expect(el.textContent).not.toContain('Niezapisane zmiany');
   });
 });
+
+describe('PatientInterviewComponent – sekcje', () => {
+  it('nagłówek „## …” jest wierszem sekcji bez pola odpowiedzi, a numeracja pomija sekcje', () => {
+    TestBed.configureTestingModule({
+      imports: [PatientInterviewComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const fixture = TestBed.createComponent(PatientInterviewComponent);
+    fixture.componentInstance.patientId = 7;
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    http.expectOne('/api/patients/7/interview').flush({
+      ...INTERVIEW,
+      items: [
+        { id: 10, position: 0, question: '## 1. Powód zgłoszenia', answer: '', has_audio: false, updated_at: '' },
+        { id: 11, position: 1, question: 'Osoba zgłaszająca', answer: '', has_audio: false, updated_at: '' },
+        { id: 12, position: 2, question: '## 2. Ciąża i poród', answer: '', has_audio: false, updated_at: '' },
+        { id: 13, position: 3, question: 'Rodzaj porodu', answer: '', has_audio: false, updated_at: '' },
+      ],
+    });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const headers = Array.from(el.querySelectorAll('tbody th')).map((th) => th.textContent?.replace(/\s+/g, ' ').trim());
+    expect(headers).toEqual(['1. Powód zgłoszeniaUsuń', '2. Ciąża i poródUsuń']);
+    expect(el.querySelectorAll('tbody textarea').length).toBe(2);
+    expect(el.textContent).toContain('2. Rodzaj porodu');
+  });
+});

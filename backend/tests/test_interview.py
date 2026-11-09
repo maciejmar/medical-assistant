@@ -53,7 +53,7 @@ async def test_approval_snapshot_feeds_llm_context(client, make_headers, monkeyp
 
     draft = await client.put(
         f"/api/patients/{pid}/interview",
-        json=_payload(items, a0="Nie wymawia głoski r"),
+        json=_payload(items, a2="Nie wymawia głoski r"),
         headers=doctor,
     )
     assert draft.status_code == 200 and draft.json()["status"] == "draft"
@@ -62,7 +62,7 @@ async def test_approval_snapshot_feeds_llm_context(client, make_headers, monkeyp
 
     approved = await client.post(
         f"/api/patients/{pid}/interview/approve",
-        json=_payload(items, a0="Nie wymawia głoski r", a3="Chodzenie w 11. miesiącu"),
+        json=_payload(items, a2="Nie wymawia głoski r", a10="Chodzenie w 11. miesiącu"),
         headers=doctor,
     )
     assert approved.status_code == 200
@@ -71,14 +71,18 @@ async def test_approval_snapshot_feeds_llm_context(client, make_headers, monkeyp
     await client.post("/api/chat", json={"message": "Co dalej?", "patient_id": pid}, headers=doctor)
     context = fake.states[-1]["patient_context"]
     assert "Wywiad z pacjentem" in context
-    assert f"- {items[0]['question']}\n  Odpowiedź: Nie wymawia głoski r" in context
+    assert f"- {items[2]['question']}\n  Odpowiedź: Nie wymawia głoski r" in context
     assert "Chodzenie w 11. miesiącu" in context
+    # Nagłówki sekcji tylko dla sekcji z odpowiedziami.
+    assert "[1. Powód zgłoszenia]" in context
+    assert "[3. Rozwój psychoruchowy i somatyczny]" in context
+    assert "Przebieg ciąży" not in context
     assert items[1]["question"] not in context, "pytania bez odpowiedzi są pomijane"
 
     # Poprawka po zatwierdzeniu: status wraca do szkicu, LLM widzi nadal zatwierdzoną wersję.
     edited = (await client.get(f"/api/patients/{pid}/interview", headers=doctor)).json()["items"]
     changed = await client.put(
-        f"/api/patients/{pid}/interview", json=_payload(edited, a0="ZMIANA"), headers=doctor
+        f"/api/patients/{pid}/interview", json=_payload(edited, a2="ZMIANA"), headers=doctor
     )
     assert changed.json()["status"] == "draft"
     await client.post("/api/chat", json={"message": "Co dalej?", "patient_id": pid}, headers=doctor)
@@ -87,7 +91,7 @@ async def test_approval_snapshot_feeds_llm_context(client, make_headers, monkeyp
     # Cofnięcie zmiany = treść znów zgodna z zatwierdzoną migawką.
     restored = await client.put(
         f"/api/patients/{pid}/interview",
-        json=_payload(edited, a0="Nie wymawia głoski r"),
+        json=_payload(edited, a2="Nie wymawia głoski r"),
         headers=doctor,
     )
     assert restored.json()["status"] == "approved"
@@ -213,3 +217,48 @@ async def test_deleting_patient_removes_interview(client, make_headers, monkeypa
     async with session_factory() as session:
         for model in (InterviewAudio, InterviewItem, PatientInterview):
             assert (await session.exec(select(model))).all() == []
+
+
+def test_default_template_comes_from_form_with_sections():
+    questions = interview_module.DEFAULT_QUESTIONS
+    sections = [q for q in questions if interview_module.is_section(q)]
+    assert questions[0] == "## 1. Powód zgłoszenia"
+    assert "## 9A. Badanie: budowa i sprawność aparatu artykulacyjnego" in sections
+    assert questions[-1] == "Termin kolejnej wizyty"
+    assert not any(q.startswith("# ") and not q.startswith("## ") for q in questions)
+    assert len(questions) - len(sections) > 80
+
+
+async def test_reset_replaces_questions_with_current_template(client, make_headers, monkeypatch):
+    async def fake_transcribe(data, **kwargs):
+        return "tekst"
+
+    monkeypatch.setattr(interview_module, "transcribe_audio", fake_transcribe)
+    admin = await make_headers("admin@example.com", Role.ADMIN)
+    doctor = await make_headers("doc@example.com")
+    pid = await _patient(client, doctor)
+    await client.put(
+        "/api/admin/interview-template", json={"questions": ["Stare pytanie"]}, headers=admin
+    )
+    items = (await client.get(f"/api/patients/{pid}/interview", headers=doctor)).json()["items"]
+    await client.put(
+        f"/api/patients/{pid}/interview/items/{items[0]['id']}/audio",
+        files={"audio": ("a.webm", b"A", "audio/webm")},
+        headers=doctor,
+    )
+    await client.post(
+        f"/api/patients/{pid}/interview/approve", json=_payload(items, a0="x"), headers=doctor
+    )
+    await client.delete("/api/admin/interview-template", headers=admin)
+
+    reset = await client.post(f"/api/patients/{pid}/interview/reset", headers=doctor)
+    assert reset.status_code == 200
+    body = reset.json()
+    assert [i["question"] for i in body["items"]] == interview_module.DEFAULT_QUESTIONS
+    assert body["status"] == "draft" and body["approved_at"], "zatwierdzona wersja zostaje"
+    async with session_factory() as session:
+        assert (await session.exec(select(InterviewAudio))).all() == []
+    other = await make_headers("other@example.com")
+    assert (
+        await client.post(f"/api/patients/{pid}/interview/reset", headers=other)
+    ).status_code == 404

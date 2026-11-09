@@ -19,12 +19,12 @@ import { InterviewService, InterviewTemplate } from '../../core/interview.servic
         }
       </div>
       <p class="mb-3 text-xs text-slate-500">
-        Jedno pytanie w wierszu. Szablon jest kopiowany do wywiadu przy jego pierwszym otwarciu – zmiana nie wpływa na
+        Jedno pytanie w wierszu; wiersz zaczynający się od „## ” to nagłówek sekcji. Szablon jest kopiowany do wywiadu przy jego pierwszym otwarciu – zmiana nie wpływa na
         wywiady już założone. Lekarz może u konkretnego pacjenta dodawać i usuwać pytania.
       </p>
       <textarea
         class="field font-mono text-sm"
-        rows="12"
+        rows="20"
         [value]="text()"
         (input)="text.set($any($event.target).value); message.set(null)"
         aria-label="Pytania szablonu wywiadu, jedno w wierszu"
@@ -53,7 +53,7 @@ export class InterviewTemplateComponent implements OnInit {
       .map((q) => q.trim())
       .filter(Boolean),
   );
-  protected readonly count = computed(() => this.questions().length);
+  protected readonly count = computed(() => this.questions().filter((q) => !q.startsWith('## ')).length);
 
   ngOnInit(): void {
     this.api.template().subscribe({ next: (t) => this.apply(t) });

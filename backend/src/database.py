@@ -152,7 +152,7 @@ class PatientNotification(SQLModel, table=True):
 
 class InterviewTemplate(SQLModel, table=True):
     """Szablon pytań wywiadu (jeden wiersz, id=1), edytowany przez administratora.
-    Brak wiersza = domyślne pytania z src.api.interview.DEFAULT_QUESTIONS."""
+    Brak wiersza = domyślny szablon z pliku src/interview_template.txt."""
 
     __tablename__ = "interview_templates"
 

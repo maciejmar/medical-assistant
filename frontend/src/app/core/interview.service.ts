@@ -53,6 +53,11 @@ export class InterviewService {
     return this.http.put<Interview>(`/api/patients/${patientId}/interview`, { items });
   }
 
+  /** Zastępuje pytania wywiadu aktualnym szablonem (odpowiedzi i nagrania są usuwane). */
+  reset(patientId: number): Observable<Interview> {
+    return this.http.post<Interview>(`/api/patients/${patientId}/interview/reset`, {});
+  }
+
   approve(patientId: number, items: InterviewEntry[]): Observable<Interview> {
     return this.http.post<Interview>(`/api/patients/${patientId}/interview/approve`, { items });
   }

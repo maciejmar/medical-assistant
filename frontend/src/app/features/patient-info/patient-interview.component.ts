@@ -14,6 +14,13 @@ import { AudioRecordingService } from '../../core/audio-recording.service';
 import { Interview, InterviewEntry, InterviewItem, InterviewService } from '../../core/interview.service';
 import { IconComponent } from '../../shared/icon.component';
 
+const SECTION_PREFIX = '## ';
+
+/** Wiersz szablonu „## Tytuł” to nagłówek sekcji, nie pytanie. */
+export function isSectionQuestion(question: string): boolean {
+  return question.startsWith(SECTION_PREFIX);
+}
+
 function apiError(err: unknown, fallback: string): string {
   if (err instanceof HttpErrorResponse && typeof err.error?.detail === 'string') {
     return err.error.detail;
@@ -82,13 +89,23 @@ export function mergeTranscript(answer: string, transcript: string): string {
               </tr>
             </thead>
             <tbody>
-              @for (item of rows(); track item.id; let i = $index) {
+              @for (item of rows(); track item.id) {
+                @if (isSection(item)) {
+                  <tr class="block border-t border-slate-200 bg-brand-50/70 first:border-t-0 md:table-row">
+                    <th scope="colgroup" colspan="2" class="block px-3 py-2 text-left md:table-cell">
+                      <span class="flex items-center justify-between gap-2">
+                        <span class="text-sm font-semibold text-brand-800">{{ sectionTitle(item) }}</span>
+                        <button type="button" class="rounded px-2 py-0.5 text-xs font-normal text-slate-400 hover:bg-red-50 hover:text-red-700" (click)="removeQuestion(item)" [attr.aria-label]="'Usuń sekcję ' + sectionTitle(item)">Usuń</button>
+                      </span>
+                    </th>
+                  </tr>
+                } @else {
                 <tr class="block border-t border-slate-200 first:border-t-0 md:table-row">
                   <td class="block px-3 pb-1 pt-3 align-top md:table-cell md:py-3">
-                    <p class="font-medium text-slate-800">{{ i + 1 }}. {{ item.question }}</p>
+                    <p class="font-medium text-slate-800">{{ number(item) }}. {{ item.question }}</p>
                     <div class="mt-2 flex flex-wrap items-center gap-1.5">
                       @if (recordingId() === item.id) {
-                        <button type="button" class="inline-flex h-8 items-center gap-1.5 rounded-full bg-red-600 pl-2.5 pr-3 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700" (click)="stopRecording(item)" [attr.aria-label]="'Zakończ nagrywanie odpowiedzi na pytanie ' + (i + 1)" title="Zakończ nagrywanie">
+                        <button type="button" class="inline-flex h-8 items-center gap-1.5 rounded-full bg-red-600 pl-2.5 pr-3 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700" (click)="stopRecording(item)" [attr.aria-label]="'Zakończ nagrywanie odpowiedzi na pytanie ' + number(item)" title="Zakończ nagrywanie">
                           <span class="h-2 w-2 animate-pulse rounded-full bg-white" aria-hidden="true"></span>
                           <app-icon name="stop" [size]="14" />
                           <span class="tabular-nums">{{ recorder.elapsedSeconds() }} s</span>
@@ -99,19 +116,19 @@ export function mergeTranscript(answer: string, transcript: string): string {
                           Transkrypcja…
                         </span>
                       } @else {
-                        <button type="button" class="grid h-8 w-8 place-items-center rounded-full border border-slate-300 bg-white text-slate-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" [disabled]="recordingId() !== null || uploadingId() !== null" (click)="startRecording(item)" [attr.aria-label]="'Nagraj odpowiedź na pytanie ' + (i + 1)" title="Nagraj odpowiedź pacjenta">
+                        <button type="button" class="grid h-8 w-8 place-items-center rounded-full border border-slate-300 bg-white text-slate-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40" [disabled]="recordingId() !== null || uploadingId() !== null" (click)="startRecording(item)" [attr.aria-label]="'Nagraj odpowiedź na pytanie ' + number(item)" title="Nagraj odpowiedź pacjenta">
                           <app-icon name="mic" />
                         </button>
                       }
                       @if (item.has_audio) {
-                        <button type="button" class="grid h-8 w-8 place-items-center rounded-full transition" [class]="playingId() === item.id ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-brand-50 text-brand-700 hover:bg-brand-100'" (click)="togglePlayback(item)" [attr.aria-label]="(playingId() === item.id ? 'Zatrzymaj odsłuch' : 'Odsłuchaj odpowiedź pacjenta') + ' – pytanie ' + (i + 1)" [attr.aria-pressed]="playingId() === item.id" [title]="playingId() === item.id ? 'Zatrzymaj odsłuch' : 'Odsłuchaj nagraną odpowiedź'">
+                        <button type="button" class="grid h-8 w-8 place-items-center rounded-full transition" [class]="playingId() === item.id ? 'bg-brand-600 text-white hover:bg-brand-700' : 'bg-brand-50 text-brand-700 hover:bg-brand-100'" (click)="togglePlayback(item)" [attr.aria-label]="(playingId() === item.id ? 'Zatrzymaj odsłuch' : 'Odsłuchaj odpowiedź pacjenta') + ' – pytanie ' + number(item)" [attr.aria-pressed]="playingId() === item.id" [title]="playingId() === item.id ? 'Zatrzymaj odsłuch' : 'Odsłuchaj nagraną odpowiedź'">
                           <app-icon [name]="playingId() === item.id ? 'pause' : 'volume-up'" />
                         </button>
-                        <button type="button" class="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600" (click)="deleteRecording(item)" [attr.aria-label]="'Usuń nagranie – pytanie ' + (i + 1)" title="Usuń nagranie">
+                        <button type="button" class="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-red-50 hover:text-red-600" (click)="deleteRecording(item)" [attr.aria-label]="'Usuń nagranie – pytanie ' + number(item)" title="Usuń nagranie">
                           <app-icon name="trash" [size]="14" />
                         </button>
                       }
-                      <button type="button" class="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-slate-400 transition hover:bg-red-50 hover:text-red-700" (click)="removeQuestion(item)" [attr.aria-label]="'Usuń pytanie ' + (i + 1)" title="Usuń pytanie">
+                      <button type="button" class="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-slate-400 transition hover:bg-red-50 hover:text-red-700" (click)="removeQuestion(item)" [attr.aria-label]="'Usuń pytanie ' + number(item)" title="Usuń pytanie">
                         <app-icon name="trash" [size]="12" /> Usuń pytanie
                       </button>
                     </div>
@@ -122,11 +139,12 @@ export function mergeTranscript(answer: string, transcript: string): string {
                       class="field w-full"
                       [value]="item.answer"
                       (input)="setAnswer(item.id, $any($event.target).value)"
-                      [attr.aria-label]="'Odpowiedź na pytanie ' + (i + 1)"
+                      [attr.aria-label]="'Odpowiedź na pytanie ' + number(item)"
                       placeholder="Odpowiedź pacjenta / opiekuna"
                     ></textarea>
                   </td>
                 </tr>
+                }
               }
             </tbody>
           </table>
@@ -148,6 +166,7 @@ export function mergeTranscript(answer: string, transcript: string): string {
           @if (message(); as m) {
             <span class="mr-auto text-sm text-emerald-700" role="status">{{ m }}</span>
           }
+          <button type="button" class="mr-auto text-xs font-medium text-slate-500 underline-offset-2 hover:text-brand-700 hover:underline" [disabled]="busy()" (click)="resetToTemplate()" title="Zastępuje pytania aktualnym szablonem wywiadu">Wczytaj aktualny szablon</button>
           <button type="button" class="btn-secondary" [disabled]="busy() || !dirty()" (click)="save()">Zapisz szkic</button>
           <button type="button" class="btn-primary" [disabled]="busy() || recordingId() !== null || uploadingId() !== null" (click)="approve()"><app-icon name="check" /> Zatwierdź</button>
         </div>
@@ -199,6 +218,42 @@ export class PatientInterviewComponent implements OnInit, OnDestroy {
       this.recorder.cancel();
     }
     this.stopPlayback();
+  }
+
+  /** Numer pytania z pominięciem nagłówków sekcji („## …”). */
+  protected readonly numbers = computed(() => {
+    const map = new Map<number, number>();
+    let n = 0;
+    for (const item of this.rows()) {
+      if (!isSectionQuestion(item.question)) {
+        map.set(item.id, ++n);
+      }
+    }
+    return map;
+  });
+
+  protected number(item: InterviewItem): number {
+    return this.numbers().get(item.id) ?? 0;
+  }
+
+  protected isSection(item: InterviewItem): boolean {
+    return isSectionQuestion(item.question);
+  }
+
+  protected sectionTitle(item: InterviewItem): string {
+    return item.question.slice(SECTION_PREFIX.length).trim();
+  }
+
+  protected resetToTemplate(): void {
+    const answered = this.rows().some((r) => r.answer.trim() || r.has_audio);
+    const warning = answered
+      ? 'Wczytać aktualny szablon? Obecne pytania, odpowiedzi i nagrania zostaną usunięte. Zatwierdzona wersja pozostanie w kontekście asystenta do ponownego zatwierdzenia.'
+      : 'Wczytać aktualny szablon pytań?';
+    if (!confirm(warning)) {
+      return;
+    }
+    this.stopPlayback();
+    this.submit(this.api.reset(this.patientId), 'Wczytano aktualny szablon pytań.');
   }
 
   protected setAnswer(id: number, answer: string): void {
