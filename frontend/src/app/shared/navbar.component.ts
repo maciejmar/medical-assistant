@@ -45,6 +45,7 @@ import { CreditMeterComponent } from './credit-meter.component';
             <a routerLink="/admin" routerLinkActive="bg-brand-50 text-brand-700" [routerLinkActiveOptions]="{ exact: true }" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Panel administratora</a>
             <a routerLink="/admin/knowledge" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Baza wiedzy</a>
             <a routerLink="/admin/llm" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Log LLM</a>
+            <a routerLink="/admin/testy" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Testy jakości</a>
           }
           @if (auth.isPatient()) {
             <a routerLink="/patient" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Mój panel</a>

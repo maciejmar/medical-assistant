@@ -50,6 +50,11 @@ export const routes: Routes = [
       import('./features/admin-panel/llm-logs.component').then((m) => m.LlmLogsComponent),
   },
   {
+    path: 'admin/testy',
+    canActivate: [adminGuard],
+    loadComponent: () => import('./features/admin-panel/goldset.component').then((m) => m.GoldsetComponent),
+  },
+  {
     path: 'admin/knowledge',
     canActivate: [adminGuard],
     loadComponent: () =>

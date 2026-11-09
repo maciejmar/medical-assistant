@@ -544,3 +544,72 @@ class PlanSuggestionOut(BaseModel):
     rationale: str
     sources: list[SuggestionSourceOut]
     grounded: bool
+
+
+class GoldsetItemIn(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    question: str = Field(min_length=1, max_length=20000)
+    reference_answer: str = Field(min_length=1, max_length=20000)
+
+
+class GoldsetItemOut(GoldsetItemIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    position: int
+    updated_at: datetime
+
+
+class GoldsetParseIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500000)
+
+
+class GoldsetReplaceIn(BaseModel):
+    items: list[GoldsetItemIn] = Field(max_length=500)
+
+
+class GoldsetRunIn(BaseModel):
+    item_ids: list[int] | None = None
+    note: str = Field(default="", max_length=300)
+
+
+class GoldsetRunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    status: str
+    total: int
+    done: int
+    errors: int
+    note: str
+    settings: dict
+    avg_score: float | None
+    avg_similarity: float | None
+    avg_latency_ms: int | None
+    total_tokens: int
+    started_at: datetime
+    finished_at: datetime | None
+
+
+class GoldsetResultOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    item_id: int | None
+    title: str
+    question: str
+    answer: str
+    sources: list
+    verdict: dict
+    score: float
+    similarity: float
+    latency_ms: int
+    tokens: int
+    judge_tokens: int
+    status: str
+    error: str | None
+
+
+class GoldsetRunDetailOut(BaseModel):
+    run: GoldsetRunOut
+    results: list[GoldsetResultOut]

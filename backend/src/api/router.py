@@ -7,6 +7,7 @@ from . import (
     billing,
     calendar,
     chat,
+    goldset,
     interview,
     knowledge,
     patient_portal,
@@ -28,3 +29,4 @@ api_router.include_router(chat.router)
 api_router.include_router(audio.router)
 api_router.include_router(admin.router)
 api_router.include_router(knowledge.router)
+api_router.include_router(goldset.router)

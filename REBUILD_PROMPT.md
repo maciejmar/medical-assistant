@@ -73,6 +73,9 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `user_subscriptions` | user_id (PK), started_at (początek okien), monthly_limit_pln, updated_at; brak wiersza = data założenia konta i `BILLING_DEFAULT_LIMIT_PLN` |
 | `credit_topups` | user_id, amount_pln, status (`pending`/`confirmed`/`rejected`/`cancelled`), reference (`LOGOPED-<user>-<id>` = tytuł przelewu, ręczne `RECZNE-…`), note, created_at, confirmed_at, confirmed_by |
 | `payment_sessions` | topup_id (→ credit_topups), user_id (bez FK), provider (`stripe`), session_id (unique), status (`open`/`paid`/`failed`/`expired`), payment_method (blik/card/p24), amount_pln, created_at, completed_at |
+| `goldset_items` | position, title, question, reference_answer – goldset (poza bazą wiedzy RAG) |
+| `goldset_runs` | started_by, status (`running`/`done`/`failed`/`cancelled`), total, done, errors, note, settings (JSON – migawka: modele, reranker, top_k), avg_score, avg_similarity, avg_latency_ms, total_tokens, started_at, finished_at |
+| `goldset_results` | run_id, item_id, title/question (kopie), answer, sources (JSON), verdict (JSON sędziego), score 0–5, similarity, latency_ms, tokens, judge_tokens, status, error |
 | `llm_calls` | user_id, operation, model_name, request (JSON – wiadomości **po anonimizacji**), response, status, error, tokeny, duration_ms |
 | `kb_documents` | title, filename, category, audience, icd10, icd11, tags, text (pełny odczytany tekst), chunks, status (`pending`/`indexed`/`error`), error, uploaded_by, source_path (import z katalogu), content_hash, pages, created_at, indexed_at |
 | `kb_private_documents` | document_id (PK → kb_documents), owner_id (→ users) – dokument prywatny; brak wpisu = wiedza wspólna |
@@ -236,6 +239,20 @@ Konto niepowiązane z kartą → komunikat 404.
   „Przywróć domyślny” (`DELETE`). Domyślnie 16 pytań wywiadu logopedycznego (powód zgłoszenia, przebieg trudności,
   ciąża i poród, rozwój ruchowy i mowy, karmienie, oddychanie, słuch, choroby/operacje, zgryz i nawyki, wywiad rodzinny,
   środowisko językowe, lateralizacja, dotychczasowa terapia, funkcjonowanie emocjonalno-społeczne, oczekiwania).
+- **`/admin/testy` – Testy jakości (goldset)** (`src/goldset.py`, `api/goldset.py`, `goldset.component.ts`):
+  import goldsetu z wklejonego tekstu (`parse_goldset`: najpierw pytania „N. Tytuł” + treść, potem druga numeracja od 1 =
+  odpowiedzi wzorcowe; nagłówek = numer zgodny z oczekiwanym, spacja po kropce, w części odpowiedzi bez kropki na końcu;
+  kroki „1.<TAB>…” są treścią i zamieniane na „1. …”; tytuł łamany na dwie linie sklejany; łamane wiersze pytań łączone
+  w akapity) → podgląd → „Zapisz goldset” (zastępuje; wyniki historyczne zostają, bo mają kopie pytań); edycja/usuwanie
+  pozycji. „Uruchom test” (jeden naraz, w tle, `asyncio` task; postęp przez odpytywanie co 3 s; „Zatrzymaj”; przebieg
+  „running” bez zadania po restarcie → `failed`): każde pytanie (tytuł + treść) przez prawdziwy `rag_graph` jak czat lekarza
+  (bez kontekstu pacjenta, bez zapisu w `chat_history`), potem LLM-sędzia (`goldset_judge`, temp. 0, JSON: score 0–5,
+  covered, missing, order_ok, errors, comment – liczy się zgodność kluczowych kroków i kolejność, dodatkowe poprawne
+  treści nie obniżają oceny) i podobieństwo cosinusowe embeddingów odpowiedzi i wzorca (`goldset_similarity`); błąd
+  pytania nie przerywa testu. Historia przebiegów (średnia ocena, podobieństwo, czas, tokeny, model, notatka), wyniki
+  od najsłabszych z rozwijanymi szczegółami (odpowiedź vs wzorzec obok siebie, braki/błędy/pokryte punkty, źródła),
+  „Porównaj z” innym przebiegiem (▲/▼ różnica oceny per pytanie). Koszt w kredytach administratora.
+  Goldset nigdy nie trafia do `/kb` (zawyżyłby wyniki).
 - **`/admin/llm`** – log zapytań LLM: lista (filtr operacji i statusu, stronicowanie po 50) i szczegóły
   (wiadomości wysłane do modelu i odpowiedź). Retencja `LLM_LOG_RETENTION_DAYS` (czyszczenie przy starcie).
 - **`/admin/knowledge`** – baza wiedzy RAG (sekcja 10).
@@ -366,6 +383,7 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
 - `audio`: `POST /audio/transcribe`
 - `admin`: `GET /admin/usage?days=`, `GET /admin/stats`, `GET|POST /admin/users`, `PATCH|DELETE /admin/users/{id}`,
   `GET /admin/llm-calls`, `GET /admin/llm-calls/{id}`
+- `admin/goldset`: `GET|PUT ""`, `POST /parse`, `PUT|DELETE /{id}`, `GET|POST /runs`, `GET|DELETE /runs/{id}`, `POST /runs/{id}/cancel`
 - `admin/knowledge` (pola formularza i PATCH z `visibility`: `shared`/`private`): `GET|POST ""`, `POST /files`, `GET|POST /import`, `PATCH|DELETE /{id}`, `POST /{id}/reindex`, `POST /reprocess`, `POST /{id}/reprocess`
 - `GET /api/health`
 
@@ -435,6 +453,8 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-09** – Testy jakości asystenta (goldset): import pytań i odpowiedzi wzorcowych z tekstu, test przez
+  prawdziwy RAG, ocena LLM-sędziego 0–5 + podobieństwo embeddingów, historia i porównanie przebiegów (`/admin/testy`).
 - **2026-11-09** – Propozycja następnego kroku planu działania od asystenta (LLM + baza wiedzy): uzupełnienie
   diagnostyki albo etap terapii, z uzasadnieniem i źródłami; „Użyj propozycji” wypełnia formularz nowego kroku.
 - **2026-11-09** – Nowy szablon wywiadu z prawdziwego formularza pierwszej konsultacji (sekcje `## `, plik

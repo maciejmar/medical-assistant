@@ -323,6 +323,66 @@ class PaymentSession(SQLModel, table=True):
     completed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
 
 
+class GoldsetItem(SQLModel, table=True):
+    """Pytanie testowe z odpowiedzią wzorcową (goldset) – poza bazą wiedzy RAG."""
+
+    __tablename__ = "goldset_items"
+
+    id: int | None = Field(default=None, primary_key=True)
+    position: int = Field(default=0)
+    title: str = Field(max_length=300)
+    question: str = Field(sa_column=Column(Text, nullable=False))
+    reference_answer: str = Field(sa_column=Column(Text, nullable=False))
+    created_at: datetime = _ts()
+    updated_at: datetime = _ts()
+
+
+class GoldsetRun(SQLModel, table=True):
+    """Przebieg testu jakości: status, postęp, migawka ustawień RAG i wyniki zbiorcze."""
+
+    __tablename__ = "goldset_runs"
+
+    id: int | None = Field(default=None, primary_key=True)
+    started_by: int | None = Field(default=None)
+    status: str = Field(default="running", max_length=20)  # running|done|failed|cancelled
+    total: int = Field(default=0)
+    done: int = Field(default=0)
+    errors: int = Field(default=0)
+    note: str = Field(default="", max_length=300)
+    settings: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    avg_score: float | None = Field(default=None)
+    avg_similarity: float | None = Field(default=None)
+    avg_latency_ms: int | None = Field(default=None)
+    total_tokens: int = Field(default=0)
+    started_at: datetime = _ts(index=True)
+    finished_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+
+
+class GoldsetResult(SQLModel, table=True):
+    """Wynik jednego pytania w przebiegu (kopie pytania i tytułu – historia odporna na edycję)."""
+
+    __tablename__ = "goldset_results"
+
+    id: int | None = Field(default=None, primary_key=True)
+    run_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("goldset_runs.id"), index=True, nullable=False)
+    )
+    item_id: int | None = Field(default=None)
+    title: str = Field(default="", max_length=300)
+    question: str = Field(default="", sa_column=Column(Text, nullable=False))
+    answer: str = Field(default="", sa_column=Column(Text, nullable=False))
+    sources: list = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    verdict: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    score: float = Field(default=0.0)
+    similarity: float = Field(default=0.0)
+    latency_ms: int = Field(default=0)
+    tokens: int = Field(default=0)
+    judge_tokens: int = Field(default=0)
+    status: str = Field(default="ok", max_length=20)
+    error: str | None = Field(default=None, max_length=500)
+    created_at: datetime = _ts()
+
+
 class LlmCall(SQLModel, table=True):
     """Pełny zapis żądania wysłanego do LLM i otrzymanej odpowiedzi (wgląd dla administratora)."""
 
