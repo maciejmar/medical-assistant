@@ -10,7 +10,8 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { PlanService, PlanStatus, PlanStep, PlanStepInput } from '../../core/plan.service';
+import { PlanService, PlanStatus, PlanStep, PlanStepInput, PlanSuggestion } from '../../core/plan.service';
+import { MarkdownPipe } from '../../shared/markdown.pipe';
 import { IconComponent, IconName } from '../../shared/icon.component';
 
 interface StatusStyle {
@@ -47,7 +48,7 @@ function apiError(err: unknown, fallback: string): string {
 @Component({
   selector: 'app-patient-plan',
   standalone: true,
-  imports: [IconComponent],
+  imports: [IconComponent, MarkdownPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="card mt-6" aria-labelledby="plan-heading">
@@ -128,6 +129,54 @@ function apiError(err: unknown, fallback: string): string {
           </button>
         </div>
 
+        @if (!editing()) {
+          <section class="rounded-xl border border-violet-200 bg-violet-50/60 p-3" aria-live="polite" aria-labelledby="suggestion-heading">
+            <div class="mb-2 flex items-center gap-2">
+              <span class="grid h-7 w-7 place-items-center rounded-full bg-violet-100 text-violet-700"><app-icon name="lightbulb" [size]="14" /></span>
+              <h4 id="suggestion-heading" class="mr-auto text-sm font-semibold text-violet-900">Propozycja asystenta</h4>
+              @if (!suggesting()) {
+                <button type="button" class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100" (click)="loadSuggestion()">
+                  <app-icon name="refresh" [size]="12" /> {{ suggestion() ? 'Inna propozycja' : 'Zaproponuj' }}
+                </button>
+              }
+            </div>
+            @if (suggesting()) {
+              <p class="flex items-center gap-2 text-sm text-violet-800">
+                <span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-600 border-t-transparent" aria-hidden="true"></span>
+                Analizuję kontekst pacjenta, dotychczasowy plan i bazę wiedzy…
+              </p>
+            } @else {
+              @if (suggestError(); as e) {
+                <p class="text-sm text-red-700" role="alert">{{ e }}</p>
+              }
+              @if (suggestion(); as s) {
+              <span class="badge mb-1.5 gap-1" [class]="s.kind === 'diagnostics' ? 'bg-sky-100 text-sky-800' : 'bg-emerald-100 text-emerald-800'">
+                <app-icon [name]="s.kind === 'diagnostics' ? 'hospital' : 'flag'" [size]="11" />
+                {{ s.kind === 'diagnostics' ? 'Uzupełnienie diagnostyki' : 'Etap terapii' }}
+              </span>
+              <p class="font-semibold text-slate-900">{{ s.title }}</p>
+              <div class="md mt-1 text-sm" [innerHTML]="s.description | markdown"></div>
+              @if (s.rationale) {
+                <p class="mt-2 text-xs text-slate-600"><span class="font-semibold">Dlaczego teraz:</span> {{ s.rationale }}</p>
+              }
+              @if (s.sources.length > 0) {
+                <ul class="mt-2 space-y-0.5 text-xs text-slate-500">
+                  @for (src of s.sources; track src.index) {
+                    <li><span class="font-semibold text-violet-700">[{{ src.index }}]</span> {{ src.title }}</li>
+                  }
+                </ul>
+              } @else if (!s.grounded) {
+                <p class="mt-2 text-xs text-amber-700">Brak pasujących materiałów w bazie wiedzy – propozycja bez źródeł.</p>
+              }
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" class="btn-primary !px-3 !py-1.5 !text-xs" (click)="useSuggestion(s)"><app-icon name="check" [size]="12" /> Użyj propozycji</button>
+                <span class="text-[11px] text-slate-500">Propozycja wspiera decyzję – ostateczny wybór należy do Ciebie.</span>
+              </div>
+              }
+            }
+          </section>
+        }
+
         <div>
           <label class="label" for="plan-title">Nazwa kroku</label>
           <input id="plan-title" class="field" autofocus maxlength="200" required [value]="title()" (input)="title.set($any($event.target).value)" />
@@ -204,6 +253,10 @@ export class PatientPlanComponent implements OnInit {
   protected readonly description = signal('');
   protected readonly stepStatus = signal<PlanStatus>('planned');
   protected readonly dialogError = signal<string | null>(null);
+  protected readonly suggestion = signal<PlanSuggestion | null>(null);
+  protected readonly suggesting = signal(false);
+  protected readonly suggestError = signal<string | null>(null);
+  private suggestRequest = 0;
 
   ngOnInit(): void {
     this.api.get(this.patientId).subscribe({
@@ -225,6 +278,43 @@ export class PatientPlanComponent implements OnInit {
 
   protected openNew(): void {
     this.open(null, { title: '', description: '', status: 'planned' });
+    this.loadSuggestion();
+  }
+
+  /** Prosi asystenta o propozycję kolejnego kroku (wynik spóźniony po zamknięciu okna jest pomijany). */
+  protected loadSuggestion(): void {
+    const request = ++this.suggestRequest;
+    this.suggestion.set(null);
+    this.suggestError.set(null);
+    this.suggesting.set(true);
+    this.api.suggest(this.patientId).subscribe({
+      next: (s) => {
+        if (request === this.suggestRequest) {
+          this.suggestion.set(s);
+          this.suggesting.set(false);
+        }
+      },
+      error: (err: unknown) => {
+        if (request === this.suggestRequest) {
+          this.suggesting.set(false);
+          this.suggestError.set(apiError(err, 'Nie udało się przygotować propozycji.'));
+        }
+      },
+    });
+  }
+
+  /** Przenosi propozycję do formularza (nazwa, opis z uzasadnieniem i źródłami) – lekarz może ją poprawić. */
+  protected useSuggestion(s: PlanSuggestion): void {
+    const parts = [s.description];
+    if (s.rationale) {
+      parts.push(`Uzasadnienie: ${s.rationale}`);
+    }
+    if (s.sources.length > 0) {
+      parts.push('Źródła: ' + s.sources.map((src) => `[${src.index}] ${src.title}`).join('; '));
+    }
+    this.title.set(s.title.slice(0, 200));
+    this.description.set(parts.filter(Boolean).join('\n\n').slice(0, 20000));
+    this.stepStatus.set('planned');
   }
 
   protected openStep(step: PlanStep): void {
@@ -236,6 +326,8 @@ export class PatientPlanComponent implements OnInit {
   }
 
   protected onDialogClosed(): void {
+    this.suggestRequest++;
+    this.suggesting.set(false);
     this.editing.set(null);
     this.dialogError.set(null);
   }

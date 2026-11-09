@@ -529,3 +529,18 @@ class SubscriptionPatch(BaseModel):
 class ManualTopUpIn(BaseModel):
     amount_pln: float = Field(gt=0, le=100000)
     note: str = Field(default="", max_length=300)
+
+
+class SuggestionSourceOut(BaseModel):
+    index: int
+    title: str
+    snippet: str
+
+
+class PlanSuggestionOut(BaseModel):
+    kind: Literal["diagnostics", "therapy"]
+    title: str
+    description: str
+    rationale: str
+    sources: list[SuggestionSourceOut]
+    grounded: bool

@@ -93,4 +93,41 @@ describe('PatientPlanComponent', () => {
     fixture.detectChanges();
     expect(el.querySelectorAll('ol > li').length).toBe(4);
   });
+
+  it('„Nowy krok” od razu prosi asystenta o propozycję, a „Użyj propozycji” wypełnia formularz', () => {
+    const { fixture, http, el, button } = setup();
+    button('Nowy krok').click();
+    fixture.detectChanges();
+    const dialog = el.querySelector('dialog')!;
+    expect(dialog.textContent).toContain('Analizuję kontekst pacjenta');
+
+    const req = http.expectOne('/api/patients/3/plan/suggest');
+    expect(req.request.method).toBe('POST');
+    req.flush({
+      kind: 'diagnostics',
+      title: 'Badanie słuchu (audiometria)',
+      description: 'Skierować na audiometrię tonalną [1].',
+      rationale: 'Częste zapalenia uszu w wywiadzie.',
+      sources: [{ index: 1, title: 'Badanie słuchu u dzieci', snippet: '…' }],
+      grounded: true,
+    });
+    fixture.detectChanges();
+    expect(dialog.textContent).toContain('Uzupełnienie diagnostyki');
+    expect(dialog.textContent).toContain('[1] Badanie słuchu u dzieci');
+
+    button('Użyj propozycji').click();
+    fixture.detectChanges();
+    expect(dialog.querySelector<HTMLInputElement>('#plan-title')!.value).toBe('Badanie słuchu (audiometria)');
+    const description = dialog.querySelector<HTMLTextAreaElement>('#plan-description')!.value;
+    expect(description).toContain('Uzasadnienie: Częste zapalenia uszu w wywiadzie.');
+    expect(description).toContain('Źródła: [1] Badanie słuchu u dzieci');
+  });
+
+  it('w edycji istniejącego kroku nie ma propozycji', () => {
+    const { fixture, http, el, button } = setup();
+    button('Diagnoza').click();
+    fixture.detectChanges();
+    expect(el.querySelector('dialog')!.textContent).not.toContain('Propozycja asystenta');
+    http.expectNone('/api/patients/3/plan/suggest');
+  });
 });

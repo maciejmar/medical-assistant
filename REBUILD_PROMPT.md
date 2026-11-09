@@ -177,6 +177,18 @@ krawędź 4 px ma kolor statusu (sky-400/emerald/amber/red-500); karta „+” n
   strzałki zmiany kolejności (`PUT …/plan/order` – pełna lista id), „Zapisz”/„Dodaj krok”. Przełącznik
   „Uwzględniaj plan w odpowiedziach asystenta” (`PUT …/plan/settings`) – gdy włączony, `describe_patient` dopisuje
   „Plan działania (kolejne kroki terapii):” z listą `N. nazwa – status: …` i opisem (`plan_for_context`).
+- **Propozycja następnego kroku planu** (`src/plan_advisor.py`, `api/plan_suggest.py`, `POST /patients/{id}/plan/suggest`):
+  po kliknięciu „Nowy krok” okno od razu prosi asystenta o propozycję (fioletowy panel „Propozycja asystenta”, spinner,
+  „Inna propozycja”). Kontekst: `describe_patient` (dane + zatwierdzony wywiad), wszystkie kroki planu ze statusami
+  (zawsze, niezależnie od przełącznika kontekstu czatu), 5 ostatnich notatek lekarza (≤ 800 zn.), fragmenty bazy wiedzy
+  (zapytanie: rozpoznanie, ICD, ostatnie kroki, początek opisu → `llm.embed` + `hybrid_search` z filtrem widoczności +
+  `reranker`). Prompt każe najpierw ocenić braki diagnostyczne (słuch, laryngolog, ortodonta, neurolog, wędzidełko, SI),
+  inaczej zaproponować kolejny etap terapii wynikający z kroków zakończonych, bez powtarzania zaplanowanych i bez
+  ponawiania zawieszonych/niewykonalnych; odpowiedź wyłącznie JSON `{kind: diagnostics|therapy, title, description,
+  rationale, sources:[n]}` (`parse_suggestion` toleruje blok ```json, filtruje numery źródeł; nieczytelna → 502).
+  Operacja `plan_suggestion` (liczona w kredytach; po wyczerpaniu – model zastępczy). „Użyj propozycji” wypełnia nazwę
+  i opis (opis + „Uzasadnienie: …” + „Źródła: [n] tytuł”), status „zaplanowany”; nic nie zapisuje się bez „Dodaj krok”.
+  W edycji istniejącego kroku panelu nie ma.
 - **Kalendarz pacjenta** (wspólny komponent `shared/patient-calendar.component.ts`; w karcie pacjenta po planie działania,
   w panelu pacjenta jako „Mój kalendarz”). Jedna tabela `patient_events` = jeden kalendarz widziany przez lekarza i pacjenta
   (synchronizacja z definicji). Widok miesiąca (pon–niedz, `calendar-utils.ts`, czas lokalny, nazwy przez `Intl` pl-PL):
@@ -343,7 +355,7 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
   `GET /admin/billing/topups?status_filter=`, `POST /admin/billing/topups/{id}/confirm|reject`
 - `calendar`: `GET|POST /patients/{id}/events` (`?start=&end=` ISO), `PUT|DELETE /patients/{id}/events/{eid}`;
   `GET|POST /portal/events`, `PUT|DELETE /portal/events/{eid}` (pacjent)
-- `plan`: `GET /patients/{id}/plan`, `PUT /patients/{id}/plan/settings`, `POST /patients/{id}/plan/steps`,
+- `plan`: `POST /patients/{id}/plan/suggest` (propozycja kroku), `GET /patients/{id}/plan`, `PUT /patients/{id}/plan/settings`, `POST /patients/{id}/plan/steps`,
   `PUT|DELETE /patients/{id}/plan/steps/{sid}`, `PUT /patients/{id}/plan/order`
 - `interview`: `GET|PUT /patients/{id}/interview`, `POST /patients/{id}/interview/approve`, `POST /patients/{id}/interview/reset`,
   `POST /patients/{id}/interview/items`, `DELETE /patients/{id}/interview/items/{iid}`,
@@ -366,7 +378,7 @@ import-progress + interview-template, patient-portal), `shared/` (modele, navbar
 admin → `/admin`, pacjent → `/patient`, lekarz → `/dashboard`. Logo: `assets/images/logopedic-logo-384.png` (zmniejszona, docięta do koła kopia `logopedic-logo.png`, białe tło),
 Ikony: `shared/icon.component.ts` (`<app-icon name="…" [size]>`) – ścieżki SVG z Bootstrap Icons 1.11.3
 (MIT) wklejone inline (volume-up, mic, stop, pause, trash, plus, check, check-circle, pause-circle, x-circle, circle,
-arrow-left, arrow-right, close, chevron-right, calendar-check, hospital, flag, flag-fill, pin, chevron-left, geo, clock, person), `currentColor`, `aria-hidden` – opis daje przycisk;
+arrow-left, arrow-right, close, chevron-right, lightbulb, refresh, calendar-check, hospital, flag, flag-fill, pin, chevron-left, geo, clock, person), `currentColor`, `aria-hidden` – opis daje przycisk;
 nowe ikony kopiuj z `icons/<nazwa>.svg` paczki bootstrap-icons. Emoji nie używamy jako ikon przycisków.
 Logo wyświetlane jako okrągła plakietka (`rounded-full bg-white`) – 120 px w pasku nawigacji, 192 px na stronie logowania; obok logo w nawigacji nazwa w dwóch liniach: „Logoped” (text-2xl, pogrubione)
 i pod nim „Assistant” (text-sm).
@@ -423,6 +435,8 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-09** – Propozycja następnego kroku planu działania od asystenta (LLM + baza wiedzy): uzupełnienie
+  diagnostyki albo etap terapii, z uzasadnieniem i źródłami; „Użyj propozycji” wypełnia formularz nowego kroku.
 - **2026-11-09** – Nowy szablon wywiadu z prawdziwego formularza pierwszej konsultacji (sekcje `## `, plik
   `src/interview_template.txt`), nagłówki sekcji w tabeli i w kontekście LLM, przycisk „Wczytaj aktualny szablon”.
 - **2026-11-08** – Stripe: sesje Checkout bez `payment_method_types` (nowe API go odrzuca – metody z panelu Stripe);

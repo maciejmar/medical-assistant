@@ -12,6 +12,7 @@ from . import (
     patient_portal,
     patients,
     plan,
+    plan_suggest,
 )
 
 api_router = APIRouter(prefix="/api")
@@ -20,6 +21,7 @@ api_router.include_router(patients.router)
 api_router.include_router(patient_portal.router)
 api_router.include_router(interview.router)
 api_router.include_router(plan.router)
+api_router.include_router(plan_suggest.router)
 api_router.include_router(calendar.router)
 api_router.include_router(billing.router)
 api_router.include_router(chat.router)

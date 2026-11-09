@@ -1,0 +1,127 @@
+import json
+
+import pytest
+
+from src import llm, plan_advisor
+from src.llm import Completion, Usage
+
+PATIENT = {
+    "first_name": "Zofia",
+    "last_name": "Wiśniewska",
+    "diagnosis": "Rotacyzm",
+    "icd_code": "F80.0",
+}
+DOCS = [
+    {
+        "id": "a",
+        "title": "Rotacyzm – etapy terapii",
+        "text": "Po pionizacji języka – wibracja.",
+        "score": 0.9,
+    },
+    {
+        "id": "b",
+        "title": "Badanie słuchu u dzieci",
+        "text": "Audiometria przy infekcjach uszu.",
+        "score": 0.5,
+    },
+]
+
+
+def test_parse_suggestion_tolerates_code_fence_and_filters_sources():
+    raw = 'Oto propozycja:\n```json\n{"kind": "diagnostics", "title": "Badanie słuchu", "description": "Audiometria.", "rationale": "Częste infekcje.", "sources": [2, 9, "x", 2]}\n```'
+    parsed = plan_advisor.parse_suggestion(raw, sources_count=2)
+    assert parsed == {
+        "kind": "diagnostics",
+        "title": "Badanie słuchu",
+        "description": "Audiometria.",
+        "rationale": "Częste infekcje.",
+        "sources": [2],
+    }
+    assert plan_advisor.parse_suggestion('{"kind": "inne", "title": "X"}', 0)["kind"] == "therapy"
+    with pytest.raises(ValueError):
+        plan_advisor.parse_suggestion('{"kind": "therapy", "title": ""}', 0)
+
+
+@pytest.fixture
+def fake_rag(monkeypatch):
+    calls: dict = {}
+
+    async def fake_embed(texts, *, user_id, operation):
+        calls["query"] = texts[0]
+        return [[0.1, 0.2]], Usage()
+
+    async def fake_search(query, vector, filters=None, user_id=None):
+        calls["search_user"] = user_id
+        return DOCS
+
+    async def fake_rerank(query, docs, top_n=None):
+        return docs
+
+    async def fake_chat(messages, *, user_id, operation, temperature=0.0, max_tokens=400):
+        calls["messages"] = messages
+        calls["operation"] = operation
+        return Completion(text=calls.get("answer", ""), usage=Usage(10, 5, 15))
+
+    monkeypatch.setattr(llm, "embed", fake_embed)
+    monkeypatch.setattr(plan_advisor.vector_store, "hybrid_search", fake_search)
+    monkeypatch.setattr(plan_advisor.reranker, "rerank", fake_rerank)
+    monkeypatch.setattr(llm, "chat_complete", fake_chat)
+    return calls
+
+
+async def test_suggestion_uses_patient_context_plan_notes_and_knowledge(
+    client, make_headers, fake_rag
+):
+    doctor = await make_headers("doc@example.com")
+    pid = (await client.post("/api/patients", json=PATIENT, headers=doctor)).json()["id"]
+    await client.post(
+        f"/api/patients/{pid}/plan/steps",
+        json={"title": "Pionizacja języka", "status": "completed"},
+        headers=doctor,
+    )
+    await client.post(
+        f"/api/patients/{pid}/notes", json={"content": "Pionizacja opanowana."}, headers=doctor
+    )
+    fake_rag["answer"] = json.dumps(
+        {
+            "kind": "therapy",
+            "title": "Wywoływanie wibracji",
+            "description": "Ćwiczenia wibracji 3× dziennie [1].",
+            "rationale": "Pionizacja zakończona.",
+            "sources": [1],
+        }
+    )
+
+    response = await client.post(f"/api/patients/{pid}/plan/suggest", headers=doctor)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["kind"] == "therapy" and body["title"] == "Wywoływanie wibracji"
+    assert body["sources"] == [
+        {"index": 1, "title": "Rotacyzm – etapy terapii", "snippet": DOCS[0]["text"]}
+    ]
+    assert body["grounded"] is True
+
+    prompt = fake_rag["messages"][1]["content"]
+    assert "Rozpoznanie: Rotacyzm" in prompt
+    assert "1. Pionizacja języka – status: zakończony" in prompt
+    assert "Pionizacja opanowana." in prompt
+    assert "[1] Rotacyzm – etapy terapii" in prompt
+    assert "Rotacyzm" in fake_rag["query"] and "Pionizacja języka" in fake_rag["query"]
+    assert fake_rag["operation"] == "plan_suggestion"
+
+    # Propozycja niczego nie zapisuje w planie.
+    steps = (await client.get(f"/api/patients/{pid}/plan", headers=doctor)).json()["steps"]
+    assert [s["title"] for s in steps] == ["Pionizacja języka"]
+
+
+async def test_suggestion_errors_and_isolation(client, make_headers, fake_rag):
+    doctor = await make_headers("doc@example.com")
+    other = await make_headers("other@example.com")
+    pid = (await client.post("/api/patients", json=PATIENT, headers=doctor)).json()["id"]
+
+    assert (
+        await client.post(f"/api/patients/{pid}/plan/suggest", headers=other)
+    ).status_code == 404
+    fake_rag["answer"] = "Nie wiem, co zaproponować."
+    garbled = await client.post(f"/api/patients/{pid}/plan/suggest", headers=doctor)
+    assert garbled.status_code == 502 and "nieczytelną" in garbled.json()["detail"]
