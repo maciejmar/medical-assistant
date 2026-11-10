@@ -14,6 +14,7 @@ import { CalendarEvent, CalendarEventInput, CalendarService, EventType } from '.
 import { PlanService, PlanStep } from '../core/plan.service';
 import { WEEKDAYS, addMonths, dayKey, longDate, monthGrid, monthTitle, startOfMonth, timeOf, toIso } from './calendar-utils';
 import { IconComponent, IconName } from './icon.component';
+import { TimeConflict, TimeConflictComponent, parseTimeConflict } from './time-conflict.component';
 
 interface TypeStyle {
   label: string;
@@ -52,7 +53,7 @@ function apiError(err: unknown, fallback: string): string {
 @Component({
   selector: 'app-patient-calendar',
   standalone: true,
-  imports: [IconComponent],
+  imports: [IconComponent, TimeConflictComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="card mt-6" aria-labelledby="calendar-heading">
@@ -249,6 +250,9 @@ function apiError(err: unknown, fallback: string): string {
           }
         }
 
+        @if (conflicts(); as c) {
+          <app-time-conflict [conflicts]="c" [busy]="busy()" (changeTerm)="changeTerm()" (confirmOverlap)="save(true)" />
+        }
         @if (dialogError(); as e) {
           <p class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{{ e }}</p>
         }
@@ -325,6 +329,7 @@ export class PatientCalendarComponent implements OnInit {
   protected readonly fDescription = signal('');
   protected readonly fStep = signal<number | null>(null);
   protected readonly dialogError = signal<string | null>(null);
+  protected readonly conflicts = signal<TimeConflict[] | null>(null);
 
   protected allowedTypes(): EventType[] {
     return this.patientId === null ? PATIENT_TYPES : ALL_TYPES;
@@ -429,7 +434,8 @@ export class PatientCalendarComponent implements OnInit {
     this.dialog.nativeElement.close();
   }
 
-  protected save(): void {
+  protected save(allowOverlap = false): void {
+    this.conflicts.set(null);
     const allDay = this.fAllDay();
     const stage = this.fType() === 'stage_start' || this.fType() === 'stage_end';
     const input: CalendarEventInput = {
@@ -441,6 +447,7 @@ export class PatientCalendarComponent implements OnInit {
       location: this.fLocation().trim(),
       description: this.fDescription().trim(),
       plan_step_id: stage ? this.fStep() : null,
+      allow_overlap: allowOverlap,
     };
     const editing = this.editing();
     const request = editing
@@ -458,7 +465,12 @@ export class PatientCalendarComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.busy.set(false);
-        this.dialogError.set(apiError(err, 'Nie udało się zapisać wydarzenia.'));
+        const conflicts = parseTimeConflict(err);
+        if (conflicts) {
+          this.conflicts.set(conflicts);
+        } else {
+          this.dialogError.set(apiError(err, 'Nie udało się zapisać wydarzenia.'));
+        }
       },
     });
   }
@@ -481,8 +493,16 @@ export class PatientCalendarComponent implements OnInit {
     });
   }
 
+  /** „Zmień termin” – chowa ostrzeżenie i ustawia kursor w polu godziny (lub daty). */
+  protected changeTerm(): void {
+    this.conflicts.set(null);
+    const field = this.dialog.nativeElement.querySelector<HTMLInputElement>(this.fAllDay() ? '#ev-day' : '#ev-start');
+    field?.focus();
+  }
+
   private show(): void {
     this.dialogError.set(null);
+    this.conflicts.set(null);
     const dialog = this.dialog.nativeElement;
     if (!dialog.open) {
       dialog.showModal();

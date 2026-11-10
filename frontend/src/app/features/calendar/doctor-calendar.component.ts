@@ -17,6 +17,7 @@ import {
   textOn,
 } from '../../shared/doctor-calendar-utils';
 import { IconComponent } from '../../shared/icon.component';
+import { TimeConflict, TimeConflictComponent, parseTimeConflict } from '../../shared/time-conflict.component';
 import { EVENT_TYPES } from '../../shared/patient-calendar.component';
 import { Patient } from '../../shared/models';
 
@@ -49,7 +50,7 @@ function apiError(err: unknown, fallback: string): string {
 @Component({
   selector: 'app-doctor-calendar',
   standalone: true,
-  imports: [IconComponent, RouterLink],
+  imports: [IconComponent, RouterLink, TimeConflictComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="space-y-4">
@@ -308,8 +309,8 @@ function apiError(err: unknown, fallback: string): string {
           <label class="label" for="dc-desc">Opis</label>
           <textarea id="dc-desc" class="field" rows="3" maxlength="5000" [value]="fDescription()" (input)="fDescription.set($any($event.target).value)"></textarea>
         </div>
-        @if (conflict(); as c) {
-          <p class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">Uwaga: w tym czasie masz już „{{ c.title }}” ({{ c.patient_name }}, {{ time(c.starts_at) }}).</p>
+        @if (conflicts(); as c) {
+          <app-time-conflict [conflicts]="c" [busy]="busy()" (changeTerm)="changeTerm()" (confirmOverlap)="save(true)" />
         }
         @if (dialogError(); as e) {
           <p class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{{ e }}</p>
@@ -410,20 +411,7 @@ export class DoctorCalendarComponent implements OnInit {
   protected readonly fLocation = signal('');
   protected readonly fDescription = signal('');
   protected readonly dialogError = signal<string | null>(null);
-  /** Ostrzeżenie o nakładaniu się z innym zajmującym czas wydarzeniem (nie blokuje zapisu). */
-  protected readonly conflict = computed(() => {
-    if (this.fAllDay() || !this.fDay() || !BLOCKING_TYPES.has(this.fType())) {
-      return null;
-    }
-    const start = new Date(toIso(this.fDay(), this.fStart()));
-    const end = this.fEnd() ? new Date(toIso(this.fDay(), this.fEnd())) : new Date(start.getTime() + DEFAULT_DURATION_MIN * 60000);
-    const editingId = this.editing()?.id;
-    return (
-      [...this.events(), ...this.upcoming()].find(
-        (e) => e.id !== editingId && BLOCKING_TYPES.has(e.type) && !e.all_day && new Date(e.starts_at) < end && this.endOf(e) > start,
-      ) ?? null
-    );
-  });
+  protected readonly conflicts = signal<TimeConflict[] | null>(null);
 
   ngOnInit(): void {
     this.patientsApi.list().subscribe({ next: (p) => this.patients.set(p) });
@@ -580,7 +568,8 @@ export class DoctorCalendarComponent implements OnInit {
     this.dialog.nativeElement.close();
   }
 
-  protected save(): void {
+  protected save(allowOverlap = false): void {
+    this.conflicts.set(null);
     const editing = this.editing();
     const patientId = editing?.patient_id ?? this.fPatient();
     if (patientId === null) {
@@ -596,6 +585,7 @@ export class DoctorCalendarComponent implements OnInit {
       location: this.fLocation().trim(),
       description: this.fDescription().trim(),
       plan_step_id: editing?.plan_step_id ?? null,
+      allow_overlap: allowOverlap,
     };
     const request = editing ? this.api.update(patientId, editing.id, input) : this.api.create(patientId, input);
     this.busy.set(true);
@@ -608,7 +598,12 @@ export class DoctorCalendarComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.busy.set(false);
-        this.dialogError.set(apiError(err, 'Nie udało się zapisać wydarzenia.'));
+        const conflicts = parseTimeConflict(err);
+        if (conflicts) {
+          this.conflicts.set(conflicts);
+        } else {
+          this.dialogError.set(apiError(err, 'Nie udało się zapisać wydarzenia.'));
+        }
       },
     });
   }
@@ -644,8 +639,16 @@ export class DoctorCalendarComponent implements OnInit {
     return (minutes - DAY_START_H * 60) * PX_PER_MIN;
   }
 
+  /** „Zmień termin” – chowa ostrzeżenie i ustawia kursor w polu godziny (lub daty). */
+  protected changeTerm(): void {
+    this.conflicts.set(null);
+    const field = this.dialog.nativeElement.querySelector<HTMLInputElement>(this.fAllDay() ? '#dc-day' : '#dc-start');
+    field?.focus();
+  }
+
   private show(): void {
     this.dialogError.set(null);
+    this.conflicts.set(null);
     if (!this.dialog.nativeElement.open) {
       this.dialog.nativeElement.showModal();
     }

@@ -90,4 +90,47 @@ describe('DoctorCalendarComponent', () => {
     const req = http.expectOne((r) => r.method === 'POST' && r.url === '/api/patients/2/events');
     expect(req.request.body.type).toBe('visit');
   });
+
+  it('termin zajęty: ostrzeżenie z kolizją, „Zmień termin” albo „Zapisz mimo to”', () => {
+    const { fixture, http, el } = setup();
+    Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes('Nowe wydarzenie'))!.click();
+    fixture.detectChanges();
+    const dialog = el.querySelector('dialog')!;
+    const select = dialog.querySelector('#dc-patient') as HTMLSelectElement;
+    select.value = '2';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    const button = (text: string) => Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent?.includes(text)) as HTMLButtonElement;
+
+    button('Zapisz').click();
+    http.expectOne((r) => r.method === 'POST' && r.url === '/api/patients/2/events').flush(
+      {
+        detail: {
+          code: 'time_conflict',
+          message: 'Ten termin jest już zajęty. Zmień termin tego wydarzenia.',
+          conflicts: [{ id: 1, title: 'Wizyta kontrolna', patient_id: 1, patient_name: 'Ala Nowak', starts_at: at(0, 9), ends_at: at(0, 10) }],
+        },
+      },
+      { status: 409, statusText: 'Conflict' },
+    );
+    fixture.detectChanges();
+    expect(dialog.textContent).toContain('Ten termin jest już zajęty');
+    expect(dialog.textContent).toContain('Wizyta kontrolna – Ala Nowak');
+    expect(dialog.textContent).toContain('Zmień termin tego wydarzenia.');
+
+    button('Zmień termin').click();
+    fixture.detectChanges();
+    expect(dialog.textContent).not.toContain('Ten termin jest już zajęty');
+    expect(document.activeElement?.id).toBe('dc-start');
+
+    button('Zapisz').click();
+    http.expectOne((r) => r.method === 'POST').flush(
+      { detail: { code: 'time_conflict', message: '', conflicts: [{ id: 1, title: 'Wizyta kontrolna', patient_id: 1, patient_name: 'Ala Nowak', starts_at: at(0, 9), ends_at: at(0, 10) }] } },
+      { status: 409, statusText: 'Conflict' },
+    );
+    fixture.detectChanges();
+    button('Zapisz mimo to').click();
+    const confirmed = http.expectOne((r) => r.method === 'POST' && r.url === '/api/patients/2/events');
+    expect(confirmed.request.body.allow_overlap).toBeTrue();
+  });
 });

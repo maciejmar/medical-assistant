@@ -5,7 +5,7 @@ Pacjent: /portal/events (tylko jego karta); może dodawać konsultacje u innych 
 i inne wpisy oraz edytować/usuwać wyłącznie wpisy, które sam dodał.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Response, status
 from sqlmodel import col, select
@@ -18,6 +18,10 @@ from .schemas import DoctorEventOut, EventIn, EventOut
 router = APIRouter(tags=["calendar"])
 
 PATIENT_EVENT_TYPES = {"consultation", "other"}
+# Typy zajmujące czas lekarza – kolizje sprawdzane tylko między nimi (konsultacje pacjenta
+# u innych specjalistów i etapy terapii nie zajmują czasu lekarza).
+BLOCKING_TYPES = {"visit", "other"}
+DEFAULT_DURATION = timedelta(minutes=45)
 MAX_EVENTS = 1000
 
 
@@ -119,9 +123,63 @@ async def _apply(
     return step_title
 
 
+def _utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+async def _check_conflicts(
+    session: SessionDep, doctor: User, body: EventIn, exclude_id: int | None
+) -> None:
+    """Termin zajęty innym wydarzeniem lekarza (dowolny jego pacjent) → 409 z listą kolizji,
+    chyba że lekarz potwierdził zapis (`allow_overlap`)."""
+    if body.allow_overlap or body.all_day or body.type not in BLOCKING_TYPES:
+        return
+    start = _utc(body.starts_at)
+    end = _utc(body.ends_at) if body.ends_at else start + DEFAULT_DURATION
+    rows = await session.exec(
+        select(PatientEvent, Patient)
+        .join(Patient, col(Patient.id) == col(PatientEvent.patient_id))
+        .where(
+            Patient.user_id == doctor.id,
+            col(PatientEvent.type).in_(BLOCKING_TYPES),
+            col(PatientEvent.all_day).is_(False),
+            col(PatientEvent.starts_at) < end,
+            col(PatientEvent.starts_at) > start - timedelta(days=1),
+        )
+    )
+    conflicts = []
+    for event, patient in rows.all():
+        if event.id == exclude_id:
+            continue
+        other_start = _utc(event.starts_at)
+        other_end = _utc(event.ends_at) if event.ends_at else other_start + DEFAULT_DURATION
+        if other_start < end and other_end > start:
+            conflicts.append(
+                {
+                    "id": event.id,
+                    "title": event.title,
+                    "patient_id": patient.id,
+                    "patient_name": f"{patient.first_name} {patient.last_name}".strip(),
+                    "starts_at": other_start.isoformat(),
+                    "ends_at": other_end.isoformat(),
+                }
+            )
+    if conflicts:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "time_conflict",
+                "message": "Ten termin jest już zajęty. Zmień termin tego wydarzenia.",
+                "conflicts": conflicts,
+            },
+        )
+
+
 async def _create(
     session: SessionDep, patient_id: int, body: EventIn, user: User, as_patient: bool
 ) -> EventOut:
+    if not as_patient:
+        await _check_conflicts(session, user, body, exclude_id=None)
     event = PatientEvent(
         patient_id=patient_id,
         type=body.type,
@@ -160,6 +218,8 @@ async def _update(
     session: SessionDep, patient_id: int, event_id: int, body: EventIn, user: User, as_patient: bool
 ) -> EventOut:
     event = await _owned_event(session, patient_id, event_id, user, as_patient)
+    if not as_patient:
+        await _check_conflicts(session, user, body, exclude_id=event.id)
     step_title = await _apply(session, event, body, patient_id, as_patient)
     session.add(event)
     await session.commit()

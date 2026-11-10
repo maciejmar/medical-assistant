@@ -36,6 +36,8 @@ export interface CalendarEventInput {
   location: string;
   description: string;
   plan_step_id: number | null;
+  /** Zapis mimo kolizji z innym wydarzeniem lekarza (po potwierdzeniu). */
+  allow_overlap?: boolean;
 }
 
 /**

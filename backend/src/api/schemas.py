@@ -442,6 +442,8 @@ class EventIn(BaseModel):
     location: str = Field(default="", max_length=300)
     description: str = Field(default="", max_length=5000)
     plan_step_id: int | None = None
+    # Lekarz potwierdził zapis mimo kolizji z innym wydarzeniem (pole nie jest zapisywane).
+    allow_overlap: bool = False
 
 
 class EventOut(BaseModel):

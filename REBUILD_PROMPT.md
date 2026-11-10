@@ -207,8 +207,7 @@ krawędź 4 px ma kolor statusu (sky-400/emerald/amber/red-500); karta „+” n
   **Najbliższe wolne terminy** (`freeSlots`): 14 dni od dziś, pon–pt, godziny pracy Od/Do i długość wizyty (30/45/60/90 min)
   ustawiane w panelu, sloty co 15 min, zajętość tylko z `visit` i `other` (konsultacje u specjalistów i etapy nie zajmują
   czasu lekarza); klik → nowe wydarzenie w tym terminie. Okno wydarzenia: wybór pacjenta (wymagany przy nowym), rodzaj,
-  tytuł, data, od–do, cały dzień, miejsce, opis; w edycji link do karty pacjenta; ostrzeżenie o kolizji z innym zajmującym
-  czas wydarzeniem (nie blokuje zapisu). Zapis przez istniejące `/patients/{id}/events` (te same uprawnienia).
+  tytuł, data, od–do, cały dzień, miejsce, opis; w edycji link do karty pacjenta; kolizje terminów – patrz niżej. Zapis przez istniejące `/patients/{id}/events` (te same uprawnienia).
 - **Kalendarz pacjenta** (wspólny komponent `shared/patient-calendar.component.ts`; w karcie pacjenta po planie działania,
   w panelu pacjenta jako „Mój kalendarz”). Jedna tabela `patient_events` = jeden kalendarz widziany przez lekarza i pacjenta
   (synchronizacja z definicji). Widok miesiąca (pon–niedz, `calendar-utils.ts`, czas lokalny, nazwy przez `Intl` pl-PL):
@@ -221,7 +220,13 @@ krawędź 4 px ma kolor statusu (sky-400/emerald/amber/red-500); karta „+” n
   Uprawnienia: lekarz – tylko własni pacjenci (`get_owned_patient`), pełna edycja (też wpisów pacjenta, oznaczonych „dodane przez
   pacjenta”); pacjent – tylko swoja karta (przez `patient_accounts`), dodaje wyłącznie `consultation`/`other`, edytuje i usuwa
   tylko własne wpisy (403), wpisy logopedy widzi w trybie tylko do odczytu. Walidacja: koniec ≥ początek (422), krok planu
-  musi należeć do pacjenta. Lista filtrowana `start` ≤ starts_at < `end` (zakres siatki), limit 1000.
+  musi należeć do pacjenta. **Kolizje terminów:** przy zapisie przez lekarza (`_check_conflicts`) wizyty lub „Inne”
+  (nie całodniowej) serwer szuka nakładających się wizyt/„Inne” u WSZYSTKICH pacjentów tego lekarza (brak końca = 45 min,
+  styk końca z początkiem to nie kolizja, edytowane wydarzenie pomijane) → 409 `{code: "time_conflict", message:
+  "Ten termin jest już zajęty. Zmień termin tego wydarzenia.", conflicts: [...]}`; okno (oba kalendarze, wspólny
+  `shared/time-conflict.component.ts`) pokazuje listę kolizji, „Zmień termin” (chowa ostrzeżenie, kursor w polu godziny)
+  i „Zapisz mimo to” (ponowny zapis z `allow_overlap: true`, pole niezapisywane). Konsultacje u specjalistów, etapy
+  terapii i wpisy pacjenta nie są blokowane. Lista filtrowana `start` ≤ starts_at < `end` (zakres siatki), limit 1000.
 - **Konto pacjenta, zalecenia, powiadomienia** (komponent `patient-care`): utworzenie/powiązanie konta pacjenta
   (`PUT /api/patients/{id}/account` – istniejące konto musi mieć `ROLE_PATIENT` i nie być powiązane z inną kartą;
   nowe wymaga hasła), odłączenie; CRUD zaleceń z opcją „powiadom e-mailem”; wysyłka powiadomień e-mail
@@ -473,6 +478,8 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-10** – Ostrzeżenie „termin zajęty” przy wizycie nachodzącej na inną (sprawdzane na serwerze dla wszystkich
+  pacjentów lekarza) z opcją „Zmień termin” lub świadomego „Zapisz mimo to”.
 - **2026-11-10** – Zakładka „Kalendarz” lekarza: wszystkie wydarzenia pacjentów w jednym widoku (tydzień z siatką
   godzin, miesiąc), pacjenci oznaczeni kolorowymi inicjałami, wolne terminy i dodawanie wizyty kliknięciem.
 - **2026-11-10** – Wskaźnik kredytów jako kółko z procentem (nawigacja i strona Kredyty), obok kwoty w zł.

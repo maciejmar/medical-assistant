@@ -208,3 +208,95 @@ async def test_doctor_sees_all_own_patients_in_one_calendar(client, make_headers
     assert all(e["editable"] for e in week.json())
     everything = (await client.get("/api/calendar/events", headers=other)).json()
     assert [e["title"] for e in everything] == ["Obcy"], "lekarz widzi tylko swoich pacjentów"
+
+
+async def test_overlapping_visit_warns_and_can_be_confirmed(client, make_headers):
+    doctor = await make_headers("doc@example.com")
+    other_doctor = await make_headers("other@example.com")
+    pid_a, patient_a = await _patient_with_account(client, doctor, "a@example.com")
+    pid_b = (await client.post("/api/patients", json=PATIENT, headers=doctor)).json()["id"]
+    pid_x = (await client.post("/api/patients", json=PATIENT, headers=other_doctor)).json()["id"]
+    first = (
+        await client.post(
+            f"/api/patients/{pid_a}/events",
+            json=_event(starts_at="2026-11-12T10:00:00Z", ends_at="2026-11-12T10:45:00Z"),
+            headers=doctor,
+        )
+    ).json()
+
+    clash = await client.post(
+        f"/api/patients/{pid_b}/events",
+        json=_event(title="Nowa", starts_at="2026-11-12T10:30:00Z", ends_at="2026-11-12T11:15:00Z"),
+        headers=doctor,
+    )
+    assert clash.status_code == 409
+    detail = clash.json()["detail"]
+    assert detail["code"] == "time_conflict" and "Zmień termin" in detail["message"]
+    assert [c["id"] for c in detail["conflicts"]] == [first["id"]]
+    assert detail["conflicts"][0]["patient_name"] == "Jan Kowalski"
+
+    # Brak końca = 45 min → 10:00–10:45 koliduje z wizytą bez końca o 10:40.
+    no_end = await client.post(
+        f"/api/patients/{pid_b}/events",
+        json=_event(starts_at="2026-11-12T10:40:00Z", ends_at=None),
+        headers=doctor,
+    )
+    assert no_end.status_code == 409
+
+    confirmed = await client.post(
+        f"/api/patients/{pid_b}/events",
+        json=_event(
+            title="Nowa",
+            starts_at="2026-11-12T10:30:00Z",
+            ends_at="2026-11-12T11:15:00Z",
+            allow_overlap=True,
+        ),
+        headers=doctor,
+    )
+    assert confirmed.status_code == 201
+
+    back_to_back = await client.post(
+        f"/api/patients/{pid_b}/events",
+        json=_event(starts_at="2026-11-12T11:15:00Z", ends_at="2026-11-12T12:00:00Z"),
+        headers=doctor,
+    )
+    assert back_to_back.status_code == 201, "styk końca z początkiem to nie kolizja"
+
+    moved = await client.put(
+        f"/api/patients/{pid_a}/events/{first['id']}",
+        json=_event(
+            title="Przesunięta", starts_at="2026-11-12T09:30:00Z", ends_at="2026-11-12T10:15:00Z"
+        ),
+        headers=doctor,
+    )
+    assert moved.status_code == 200, "wydarzenie nie koliduje samo ze sobą"
+
+    for allowed in (
+        _event(
+            type="consultation", title="Laryngolog", starts_at="2026-11-12T10:30:00Z", ends_at=None
+        ),
+        _event(
+            type="stage_start",
+            title="Etap",
+            starts_at="2026-11-12T00:00:00Z",
+            ends_at=None,
+            all_day=True,
+        ),
+    ):
+        assert (
+            await client.post(f"/api/patients/{pid_b}/events", json=allowed, headers=doctor)
+        ).status_code == 201, "konsultacje i etapy nie zajmują czasu lekarza"
+    assert (
+        await client.post(
+            "/api/portal/events",
+            json=_event(type="consultation", starts_at="2026-11-12T10:30:00Z", ends_at=None),
+            headers=patient_a,
+        )
+    ).status_code == 201, "pacjent nie jest blokowany"
+    assert (
+        await client.post(
+            f"/api/patients/{pid_x}/events",
+            json=_event(starts_at="2026-11-12T10:30:00Z", ends_at=None),
+            headers=other_doctor,
+        )
+    ).status_code == 201, "kalendarze lekarzy są niezależne"
