@@ -192,6 +192,9 @@ krawędź 4 px ma kolor statusu (sky-400/emerald/amber/red-500); karta „+” n
   Operacja `plan_suggestion` (liczona w kredytach; po wyczerpaniu – model zastępczy). „Użyj propozycji” wypełnia nazwę
   i opis (opis + „Uzasadnienie: …” + „Źródła: [n] tytuł”), status „zaplanowany”; nic nie zapisuje się bez „Dodaj krok”.
   W edycji istniejącego kroku panelu nie ma.
+  Anonimizacja: oba wywołania (`llm.embed` zapytania i `llm.chat_complete`) idą przez centralny anonimizator – test
+  `test_suggestion_prompt_and_search_are_anonymized` sprawdza, że imię (z odmianą), nazwisko, PESEL i telefon z opisu,
+  kroków planu i notatek nie wychodzą do API ani do logu LLM, a treść kliniczna zostaje.
 - **Kalendarz pacjenta** (wspólny komponent `shared/patient-calendar.component.ts`; w karcie pacjenta po planie działania,
   w panelu pacjenta jako „Mój kalendarz”). Jedna tabela `patient_events` = jeden kalendarz widziany przez lekarza i pacjenta
   (synchronizacja z definicji). Widok miesiąca (pon–niedz, `calendar-utils.ts`, czas lokalny, nazwy przez `Intl` pl-PL):
@@ -285,7 +288,10 @@ Konto niepowiązane z kartą → komunikat 404.
   webhook się spóźnia), `payment=cancelled` → komunikat; parametry usuwane z adresu. Zamówienia online nie liczą się
   do limitu 3 oczekujących przelewów i nie trafiają na listę „do potwierdzenia” admina. Bez `STRIPE_SECRET_KEY`
   (`online_enabled=false`) – tylko przelew tradycyjny. UI: wybór kwoty (20/50/100) + „Zapłać online” / „Przelew tradycyjny”.
-- **Wskaźnik:** `shared/credit-meter.component.ts` (pasek + „zużyte / dostępne zł”, kolor: brand < 75% ≤ amber < 100% ≤ red)
+- **Wskaźnik:** `shared/credit-ring.component.ts` – kółko SVG z procentem w środku (łuk ∝ zużyciu, śladowe zużycie jako
+  kropka i „<1%”, `role=img` z opisem kwot) oraz `shared/credit-meter.component.ts` – pasek + „zużyte / dostępne zł”;
+  kolor obu: brand < 75% ≤ amber < 100% ≤ red. W pasku nawigacji kółko 40 px + „KREDYTY / zużyte / dostępne zł”,
+  na stronie Kredyty kółko 140 px + kwota + pasek;
   w pasku nawigacji lekarza/admina (link do `/kredyty`, odświeżany przy każdej nawigacji i po odpowiedzi czatu),
   na stronie Kredyty i w panelu admina (`billing-admin.component.ts`: doładowania do potwierdzenia, tabela kont lekarzy
   i adminów z wykorzystaniem, oknem, edycją limitu i daty startu subskrypcji, doładowaniem ręcznym). Pacjenci – bez wskaźnika.
@@ -453,6 +459,7 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-10** – Wskaźnik kredytów jako kółko z procentem (nawigacja i strona Kredyty), obok kwoty w zł.
 - **2026-11-09** – Testy jakości asystenta (goldset): import pytań i odpowiedzi wzorcowych z tekstu, test przez
   prawdziwy RAG, ocena LLM-sędziego 0–5 + podobieństwo embeddingów, historia i porównanie przebiegów (`/admin/testy`).
 - **2026-11-09** – Propozycja następnego kroku planu działania od asystenta (LLM + baza wiedzy): uzupełnienie

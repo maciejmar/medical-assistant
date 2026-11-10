@@ -3,13 +3,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter } from 'rxjs';
 import { AuthService } from '../core/auth.service';
-import { BillingService } from '../core/billing.service';
-import { CreditMeterComponent } from './credit-meter.component';
+import { BillingService, formatPln } from '../core/billing.service';
+import { CreditRingComponent } from './credit-ring.component';
 
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, CreditMeterComponent],
+  imports: [RouterLink, RouterLinkActive, CreditRingComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -51,9 +51,12 @@ import { CreditMeterComponent } from './credit-meter.component';
             <a routerLink="/patient" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Mój panel</a>
           }
           @if (auth.canTreat() && billing.mine(); as credits) {
-            <a routerLink="/kredyty" class="rounded-lg px-3 py-1.5 hover:bg-slate-100 sm:ml-2" title="Kredyty – szczegóły i doładowanie" (click)="open.set(false)">
-              <span class="block text-[10px] font-semibold uppercase tracking-wide" [class]="credits.status.exhausted ? 'text-red-600' : 'text-slate-400'">Kredyty</span>
-              <app-credit-meter [status]="credits.status" [compact]="true" />
+            <a routerLink="/kredyty" class="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-slate-100 sm:ml-2" title="Kredyty – szczegóły i doładowanie" (click)="open.set(false)">
+              <app-credit-ring [status]="credits.status" [size]="40" />
+              <span class="leading-tight">
+                <span class="block text-[10px] font-semibold uppercase tracking-wide" [class]="credits.status.exhausted ? 'text-red-600' : 'text-slate-400'">Kredyty</span>
+                <span class="block text-xs font-semibold tabular-nums text-slate-700">{{ pln(credits.status.used_pln) }} / {{ pln(credits.status.available_pln) }}</span>
+              </span>
             </a>
           }
           <span class="px-3 py-1 text-xs text-slate-500 sm:ml-2">{{ auth.user()?.full_name }}</span>
@@ -70,6 +73,10 @@ export class NavbarComponent {
   protected readonly auth = inject(AuthService);
   protected readonly billing = inject(BillingService);
   protected readonly open = signal(false);
+
+  protected pln(value: number): string {
+    return formatPln(value);
+  }
 
   constructor() {
     // Wskaźnik kredytów odświeżany przy każdej zmianie strony (lekarz i administrator).

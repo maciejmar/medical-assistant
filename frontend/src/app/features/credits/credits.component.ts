@@ -4,6 +4,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { ActivatedRoute, Router } from '@angular/router';
 import { BillingService, EXHAUSTED_MESSAGE, TopUp, formatPln } from '../../core/billing.service';
 import { CreditMeterComponent } from '../../shared/credit-meter.component';
+import { CreditRingComponent } from '../../shared/credit-ring.component';
 
 const STATUS_LABELS: Record<TopUp['status'], { label: string; css: string }> = {
   pending: { label: 'Oczekuje na wpłatę', css: 'bg-amber-100 text-amber-800' },
@@ -16,7 +17,7 @@ const STATUS_LABELS: Record<TopUp['status'], { label: string; css: string }> = {
 @Component({
   selector: 'app-credits',
   standalone: true,
-  imports: [DatePipe, CreditMeterComponent],
+  imports: [DatePipe, CreditMeterComponent, CreditRingComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mx-auto max-w-4xl space-y-6">
@@ -33,7 +34,16 @@ const STATUS_LABELS: Record<TopUp['status'], { label: string; css: string }> = {
         }
 
         <section class="card space-y-4">
-          <app-credit-meter [status]="d.status" />
+          <div class="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+            <app-credit-ring [status]="d.status" [size]="140" />
+            <div class="w-full min-w-0 flex-1 space-y-3">
+              <p class="text-center sm:text-left">
+                <span class="text-2xl font-bold tabular-nums text-slate-900">{{ pln(d.status.used_pln) }}</span>
+                <span class="text-slate-500"> z {{ pln(d.status.available_pln) }} wykorzystano</span>
+              </p>
+              <app-credit-meter [status]="d.status" />
+            </div>
+          </div>
           <dl class="grid gap-3 text-sm sm:grid-cols-4">
             <div><dt class="label">Limit miesięczny</dt><dd class="font-semibold">{{ pln(d.status.limit_pln) }}</dd></div>
             <div><dt class="label">Doładowania</dt><dd class="font-semibold">{{ pln(d.status.topups_pln) }}</dd></div>

@@ -1,8 +1,11 @@
 import json
+from types import SimpleNamespace
 
 import pytest
+from sqlmodel import select
 
 from src import llm, plan_advisor
+from src.database import LlmCall, session_factory
 from src.llm import Completion, Usage
 
 PATIENT = {
@@ -125,3 +128,79 @@ async def test_suggestion_errors_and_isolation(client, make_headers, fake_rag):
     fake_rag["answer"] = "Nie wiem, co zaproponować."
     garbled = await client.post(f"/api/patients/{pid}/plan/suggest", headers=doctor)
     assert garbled.status_code == 502 and "nieczytelną" in garbled.json()["detail"]
+
+
+async def test_suggestion_prompt_and_search_are_anonymized(client, make_headers, monkeypatch):
+    """Prawdziwe llm.chat_complete i llm.embed – podstawiony tylko klient API: do modelu i do
+    wyszukiwania nie trafia imię, nazwisko, PESEL ani telefon pacjenta (także z notatek i planu)."""
+    sent: dict = {}
+
+    async def fake_chat_create(**kwargs):
+        sent["chat"] = kwargs["messages"]
+        answer = {
+            "kind": "therapy",
+            "title": "Krok",
+            "description": "Opis",
+            "rationale": "",
+            "sources": [],
+        }
+        return SimpleNamespace(
+            model="m",
+            usage=None,
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(answer)))],
+        )
+
+    async def fake_embed_create(**kwargs):
+        sent["embed"] = kwargs["input"]
+        return SimpleNamespace(data=[SimpleNamespace(index=0, embedding=[0.1, 0.2])], usage=None)
+
+    async def fake_search(query, vector, filters=None, user_id=None):
+        return []
+
+    async def fake_rerank(query, docs, top_n=None):
+        return []
+
+    monkeypatch.setattr(llm.client.chat.completions, "create", fake_chat_create)
+    monkeypatch.setattr(llm.client.embeddings, "create", fake_embed_create)
+    monkeypatch.setattr(plan_advisor.vector_store, "hybrid_search", fake_search)
+    monkeypatch.setattr(plan_advisor.reranker, "rerank", fake_rerank)
+
+    doctor = await make_headers("doc@example.com")
+    pid = (
+        await client.post(
+            "/api/patients",
+            json={
+                **PATIENT,
+                "description": "Zofia Wiśniewska, tel. 600 700 800, PESEL 12345678901",
+            },
+            headers=doctor,
+        )
+    ).json()["id"]
+    await client.post(
+        f"/api/patients/{pid}/plan/steps",
+        json={"title": "Ćwiczenia z Zofią", "description": "Mama Zofii dzwoni: 600700800"},
+        headers=doctor,
+    )
+    await client.post(
+        f"/api/patients/{pid}/notes",
+        json={"content": "Zofia Wiśniewska ćwiczy pionizację, PESEL 12345678901."},
+        headers=doctor,
+    )
+
+    response = await client.post(f"/api/patients/{pid}/plan/suggest", headers=doctor)
+    assert response.status_code == 200, response.text
+    await llm.drain_background_tasks()
+
+    outgoing = json.dumps(sent["chat"], ensure_ascii=False) + json.dumps(
+        sent["embed"], ensure_ascii=False
+    )
+    for secret in ("Zofi", "Wiśniewsk", "12345678901", "600 700 800", "600700800"):
+        assert secret not in outgoing, f"{secret!r} wyciekło do LLM"
+    assert "[IMIĘ PACJENTKI]" in outgoing and "[PESEL]" in outgoing and "[TELEFON]" in outgoing
+    assert "Rozpoznanie: Rotacyzm" in outgoing, "treść kliniczna zostaje"
+
+    async with session_factory() as session:
+        logged = (await session.exec(select(LlmCall))).all()
+    assert logged and all("Zofi" not in str(c.request) for c in logged), (
+        "log admina też zanonimizowany"
+    )
