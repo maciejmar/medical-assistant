@@ -13,7 +13,7 @@ from sqlmodel import col, select
 from ..auth import CurrentDoctor, CurrentPatient, SessionDep
 from ..database import Patient, PatientAccount, PatientEvent, PlanStep, User, utcnow
 from .patients import get_owned_patient
-from .schemas import EventIn, EventOut
+from .schemas import DoctorEventOut, EventIn, EventOut
 
 router = APIRouter(tags=["calendar"])
 
@@ -215,6 +215,44 @@ async def doctor_delete_event(
 ) -> Response:
     patient = await get_owned_patient(session, patient_id, doctor)
     return await _delete(session, patient.id, event_id, doctor, False)  # type: ignore[arg-type]
+
+
+@router.get("/calendar/events", response_model=list[DoctorEventOut])
+async def doctor_all_events(
+    session: SessionDep,
+    doctor: CurrentDoctor,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> list[DoctorEventOut]:
+    """Zbiorczy kalendarz lekarza: wydarzenia wszystkich jego pacjentów w zakresie dat
+    (tylko pacjenci tego lekarza – filtr po patients.user_id)."""
+    query = (
+        select(PatientEvent, Patient)
+        .join(Patient, col(Patient.id) == col(PatientEvent.patient_id))
+        .where(Patient.user_id == doctor.id)
+    )
+    if start is not None:
+        query = query.where(col(PatientEvent.starts_at) >= start)
+    if end is not None:
+        query = query.where(col(PatientEvent.starts_at) < end)
+    rows = (
+        await session.exec(
+            query.order_by(col(PatientEvent.starts_at), col(PatientEvent.id)).limit(MAX_EVENTS)
+        )
+    ).all()
+    step_ids = {e.plan_step_id for e, _ in rows if e.plan_step_id is not None}
+    titles: dict[int, str] = {}
+    if step_ids:
+        steps = await session.exec(select(PlanStep).where(col(PlanStep.id).in_(step_ids)))
+        titles = {s.id: s.title for s in steps.all() if s.id is not None}
+    return [
+        DoctorEventOut(
+            **_out(event, doctor, False, titles.get(event.plan_step_id or 0)).model_dump(),
+            patient_id=patient.id,  # type: ignore[arg-type]
+            patient_name=f"{patient.first_name} {patient.last_name}".strip(),
+        )
+        for event, patient in rows
+    ]
 
 
 # --- pacjent --------------------------------------------------------------------------------

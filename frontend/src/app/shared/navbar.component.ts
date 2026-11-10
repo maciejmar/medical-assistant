@@ -39,6 +39,7 @@ import { CreditRingComponent } from './credit-ring.component';
         >
           @if (auth.canTreat()) {
             <a routerLink="/dashboard" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Pacjenci</a>
+            <a routerLink="/kalendarz" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Kalendarz</a>
             <a routerLink="/chat" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Asystent</a>
           }
           @if (auth.isAdmin()) {

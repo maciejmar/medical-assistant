@@ -21,6 +21,12 @@ export interface CalendarEvent {
   updated_at: string;
 }
 
+/** Wydarzenie w zbiorczym kalendarzu lekarza (wszyscy pacjenci). */
+export interface DoctorCalendarEvent extends CalendarEvent {
+  patient_id: number;
+  patient_name: string;
+}
+
 export interface CalendarEventInput {
   type: EventType;
   title: string;
@@ -49,6 +55,13 @@ export class CalendarService {
       params['end'] = end.toISOString();
     }
     return this.http.get<CalendarEvent[]>(this.base(patientId), { params });
+  }
+
+  /** Wszystkie wydarzenia pacjentów zalogowanego lekarza w zakresie dat. */
+  doctorEvents(start: Date, end: Date): Observable<DoctorCalendarEvent[]> {
+    return this.http.get<DoctorCalendarEvent[]>('/api/calendar/events', {
+      params: { start: start.toISOString(), end: end.toISOString() },
+    });
   }
 
   create(patientId: number | null, input: CalendarEventInput): Observable<CalendarEvent> {

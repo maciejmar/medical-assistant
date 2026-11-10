@@ -613,3 +613,10 @@ class GoldsetResultOut(BaseModel):
 class GoldsetRunDetailOut(BaseModel):
     run: GoldsetRunOut
     results: list[GoldsetResultOut]
+
+
+class DoctorEventOut(EventOut):
+    """Wydarzenie w zbiorczym kalendarzu lekarza – z pacjentem, którego dotyczy."""
+
+    patient_id: int
+    patient_name: str

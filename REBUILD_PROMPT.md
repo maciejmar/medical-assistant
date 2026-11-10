@@ -195,6 +195,20 @@ krawędź 4 px ma kolor statusu (sky-400/emerald/amber/red-500); karta „+” n
   Anonimizacja: oba wywołania (`llm.embed` zapytania i `llm.chat_complete`) idą przez centralny anonimizator – test
   `test_suggestion_prompt_and_search_are_anonymized` sprawdza, że imię (z odmianą), nazwisko, PESEL i telefon z opisu,
   kroków planu i notatek nie wychodzą do API ani do logu LLM, a treść kliniczna zostaje.
+- **Kalendarz lekarza – zakładka „Kalendarz”** (`/kalendarz`, `features/calendar/doctor-calendar.component.ts`,
+  `GET /api/calendar/events?start&end` – wydarzenia wszystkich pacjentów lekarza z `patient_id`/`patient_name`, filtr
+  `patients.user_id`). Widok **tygodnia**: siatka 7:00–20:00 (1,2 px/min), szare tło poza godzinami pracy i w weekend,
+  czerwona linia „teraz”, wydarzenia całodniowe nad siatką, bloki wg czasu (brak końca → 45 min) z torami dla nakładań
+  (`layoutLanes`), kliknięcie wolnego miejsca → nowe wydarzenie o tej godzinie (15 min). Widok **miesiąca** (klik dnia →
+  jego tydzień). **Odróżnianie pacjentów:** ikona = typ wydarzenia (jak w kalendarzu pacjenta), pacjent = kółko z
+  inicjałami w kolorze z palety kategorialnej wykresów (`PATIENT_COLORS`, 6 barw, kolor = id pacjenta mod 6 – stały przy
+  filtrowaniu; inicjały zapewniają rozróżnienie przy powtórzeniach koloru i dla daltonistów; kolor tekstu wg luminancji
+  `textOn`) + lewa krawędź bloku w kolorze pacjenta. Legenda pacjentów z liczbą wydarzeń i filtrem pokaż/ukryj, legenda typów.
+  **Najbliższe wolne terminy** (`freeSlots`): 14 dni od dziś, pon–pt, godziny pracy Od/Do i długość wizyty (30/45/60/90 min)
+  ustawiane w panelu, sloty co 15 min, zajętość tylko z `visit` i `other` (konsultacje u specjalistów i etapy nie zajmują
+  czasu lekarza); klik → nowe wydarzenie w tym terminie. Okno wydarzenia: wybór pacjenta (wymagany przy nowym), rodzaj,
+  tytuł, data, od–do, cały dzień, miejsce, opis; w edycji link do karty pacjenta; ostrzeżenie o kolizji z innym zajmującym
+  czas wydarzeniem (nie blokuje zapisu). Zapis przez istniejące `/patients/{id}/events` (te same uprawnienia).
 - **Kalendarz pacjenta** (wspólny komponent `shared/patient-calendar.component.ts`; w karcie pacjenta po planie działania,
   w panelu pacjenta jako „Mój kalendarz”). Jedna tabela `patient_events` = jeden kalendarz widziany przez lekarza i pacjenta
   (synchronizacja z definicji). Widok miesiąca (pon–niedz, `calendar-utils.ts`, czas lokalny, nazwy przez `Intl` pl-PL):
@@ -376,7 +390,7 @@ liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzony
   `POST /billing/checkout/sync`, `POST /payments/stripe/webhook` (bez JWT, podpis Stripe); admin: `GET /admin/billing/users`,
   `PATCH /admin/billing/users/{id}` (limit, start subskrypcji), `POST /admin/billing/users/{id}/topups` (ręczne),
   `GET /admin/billing/topups?status_filter=`, `POST /admin/billing/topups/{id}/confirm|reject`
-- `calendar`: `GET|POST /patients/{id}/events` (`?start=&end=` ISO), `PUT|DELETE /patients/{id}/events/{eid}`;
+- `calendar`: `GET /calendar/events` (zbiorczy kalendarz lekarza), `GET|POST /patients/{id}/events` (`?start=&end=` ISO), `PUT|DELETE /patients/{id}/events/{eid}`;
   `GET|POST /portal/events`, `PUT|DELETE /portal/events/{eid}` (pacjent)
 - `plan`: `POST /patients/{id}/plan/suggest` (propozycja kroku), `GET /patients/{id}/plan`, `PUT /patients/{id}/plan/settings`, `POST /patients/{id}/plan/steps`,
   `PUT|DELETE /patients/{id}/plan/steps/{sid}`, `PUT /patients/{id}/plan/order`
@@ -459,6 +473,8 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-10** – Zakładka „Kalendarz” lekarza: wszystkie wydarzenia pacjentów w jednym widoku (tydzień z siatką
+  godzin, miesiąc), pacjenci oznaczeni kolorowymi inicjałami, wolne terminy i dodawanie wizyty kliknięciem.
 - **2026-11-10** – Wskaźnik kredytów jako kółko z procentem (nawigacja i strona Kredyty), obok kwoty w zł.
 - **2026-11-09** – Testy jakości asystenta (goldset): import pytań i odpowiedzi wzorcowych z tekstu, test przez
   prawdziwy RAG, ocena LLM-sędziego 0–5 + podobieństwo embeddingów, historia i porównanie przebiegów (`/admin/testy`).

@@ -166,3 +166,45 @@ async def test_calendars_are_isolated_between_doctors_and_patients(client, make_
     async with session_factory() as session:
         titles = [e.title for e in (await session.exec(select(PatientEvent))).all()]
     assert titles == ["B"]
+
+
+async def test_doctor_sees_all_own_patients_in_one_calendar(client, make_headers):
+    doctor = await make_headers("doc@example.com")
+    other = await make_headers("other@example.com")
+    first = (
+        await client.post("/api/patients", json={**PATIENT, "first_name": "Ala"}, headers=doctor)
+    ).json()["id"]
+    second = (
+        await client.post("/api/patients", json={**PATIENT, "first_name": "Ola"}, headers=doctor)
+    ).json()["id"]
+    foreign = (await client.post("/api/patients", json=PATIENT, headers=other)).json()["id"]
+    await client.post(
+        f"/api/patients/{second}/events",
+        json=_event(title="Wizyta B", starts_at="2026-11-12T12:00:00Z", ends_at=None),
+        headers=doctor,
+    )
+    await client.post(
+        f"/api/patients/{first}/events",
+        json=_event(title="Wizyta A", starts_at="2026-11-12T09:00:00Z", ends_at=None),
+        headers=doctor,
+    )
+    await client.post(
+        f"/api/patients/{first}/events",
+        json=_event(title="Za tydzień", starts_at="2026-11-20T09:00:00Z", ends_at=None),
+        headers=doctor,
+    )
+    await client.post(f"/api/patients/{foreign}/events", json=_event(title="Obcy"), headers=other)
+
+    week = await client.get(
+        "/api/calendar/events",
+        params={"start": "2026-11-09T00:00:00Z", "end": "2026-11-16T00:00:00Z"},
+        headers=doctor,
+    )
+    assert week.status_code == 200
+    assert [(e["title"], e["patient_name"], e["patient_id"]) for e in week.json()] == [
+        ("Wizyta A", "Ala Kowalski", first),
+        ("Wizyta B", "Ola Kowalski", second),
+    ]
+    assert all(e["editable"] for e in week.json())
+    everything = (await client.get("/api/calendar/events", headers=other)).json()
+    assert [e["title"] for e in everything] == ["Obcy"], "lekarz widzi tylko swoich pacjentów"

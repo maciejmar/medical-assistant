@@ -33,6 +33,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/chat/chat.component').then((m) => m.ChatComponent),
   },
   {
+    path: 'kalendarz',
+    canActivate: [doctorGuard],
+    loadComponent: () =>
+      import('./features/calendar/doctor-calendar.component').then((m) => m.DoctorCalendarComponent),
+  },
+  {
     path: 'kredyty',
     canActivate: [doctorGuard],
     loadComponent: () => import('./features/credits/credits.component').then((m) => m.CreditsComponent),
