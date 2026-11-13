@@ -63,6 +63,11 @@ def test_answer_messages_contain_sources_and_no_patient_name():
     assert "Wiek: 6 lat" in messages[-1]["content"]
     ungrounded = build_answer_messages({**state, "documents": []}, grounded=False)
     assert "Nie znaleziono w bazie wiedzy" in ungrounded[0]["content"]
+    assert "(wywiad)" in messages[0]["content"]
+    # Bez pacjenta (np. test goldsetu) model nie może powoływać się na wywiad/plan/opis.
+    no_patient = build_answer_messages({**state, "patient_context": None}, grounded=True)
+    assert "(wywiad)" not in no_patient[0]["content"]
+    assert "najpierw → potem → na końcu" in no_patient[0]["content"]
 
 
 def test_seed_dataset_is_complete_and_unique():

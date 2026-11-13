@@ -103,7 +103,7 @@ Graf: `rewrite_query → retrieve → rerank → generate | generate_without_con
    Filtr kategorii/grupy **nie wyklucza** dokumentów: wyniki z filtrem i bez filtra są łączone (`merge_candidates`),
    o kolejności decyduje reranker. Gdy brak wyników – ponowna próba z oryginalnym pytaniem.
 3. **rerank** – lokalny Cross-Encoder `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (rozgrzewany przy starcie;
-   gdy nie da się go wczytać – kolejność RRF). Zwraca `RERANK_TOP_N=4` fragmenty z wynikiem ≥ `RERANK_MIN_SCORE`;
+   gdy nie da się go wczytać – kolejność RRF). Zwraca `RERANK_TOP_N=6` fragmentów z wynikiem ≥ `RERANK_MIN_SCORE`;
    gdy żaden nie przekracza progu – `RERANK_FALLBACK_N=2` najlepsze z flagą `low_relevance` (UI: „luźno związane”,
    prompt: zaznacz słabe dopasowanie). Wysyła zdarzenie `sources`.
 4. **generate** – strumieniowanie odpowiedzi; prompt systemowy: rzeczowo, po polsku, **każde merytoryczne
@@ -167,8 +167,11 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
   ponownego zatwierdzenia).
   **Do LLM trafia wyłącznie zatwierdzona migawka**: `describe_patient(patient, interview)` dopisuje sekcję
   „Wywiad z pacjentem / opiekunem (zatwierdzony przez lekarza):” z parami `- pytanie / Odpowiedź: …` (tylko pytania
-  z odpowiedzią), pogrupowanymi nagłówkami `[sekcja]` (tylko sekcje z co najmniej jedną odpowiedzią), dzięki czemu wywiad trafia też do kroku przepisywania zapytania; `ANSWER_SYSTEM` każe odnosić
-  zalecenia do wywiadu i cytować fakty o pacjencie jako „(wywiad)”/„(opis pacjenta)”, nie numerem źródła.
+  z odpowiedzią), pogrupowanymi nagłówkami `[sekcja]` (tylko sekcje z co najmniej jedną odpowiedzią), dzięki czemu wywiad trafia też do kroku przepisywania zapytania; `PATIENT_RULES` (doklejane do
+  `ANSWER_SYSTEM` tylko, gdy jest kontekst pacjenta) każą odnosić zalecenia do wywiadu i cytować fakty o pacjencie jako
+  „(wywiad)”/„(opis pacjenta)”, nie numerem źródła. `ANSWER_SYSTEM` zawiera też zasady rozumowania klinicznego dla pytań
+  o plan/kolejność (kroki „najpierw → potem → na końcu”: diagnoza przyczyny → oddychanie/wargi → pozycja spoczynkowa
+  języka → połykanie → żucie → artykulacja → automatyzacja; dostosowanie do wieku; masaż pomocniczo; ortodonta/laryngolog).
   Anonimizacja jak dla reszty kontekstu (centralnie w `src/llm.py`).
 - **Plan działania** (komponent `patient-plan`, między wywiadem a zaleceniami): poziomy diagram (`<ol>` z przewijaniem
   w poziomie) kart-kroków 192 px: „Krok N”, nazwa (max 3 linie), status z ikoną i etykietą (kolor nigdy sam):
@@ -479,6 +482,10 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-13** – Poprawa jakości wg goldsetu (przebieg #1 ≈ 3,5/5): instrukcje „(wywiad)/(plan)/(opis pacjenta)”
+  wydzielone do `PATIENT_RULES` i dołączane tylko z kontekstem pacjenta (bez niego model zmyślał takie odnośniki);
+  zasady rozumowania klinicznego i zakaz dopisywania objawów w `ANSWER_SYSTEM`; `RERANK_TOP_N` 4 → 6; sędzia goldsetu
+  przypisuje każdy punkt wzorca do dokładnie jednej listy (covered/missing) i uznaje parafrazy.
 - **2026-11-13** – Import goldsetu akceptuje odpowiedzi z nagłówkami „ad1.”, „ad2.”… (wcześniej tylko druga numeracja
   „1. Tytuł” – tekst w formacie „adN.” kończył się błędem „Nie rozpoznano par”); wstęp „Jasne. Uporządkuję…” nie
   dokleja się do ostatniego pytania; wielokrotne spacje po numerze kroku normalizowane.

@@ -155,7 +155,11 @@ JUDGE_SYSTEM = (
     "czy nie zawiera błędów lub zaleceń sprzecznych z wzorcem. Dodatkowe poprawne informacje nie "
     "obniżają oceny; pominięcia kluczowych kroków i błędy – tak. Skala: 5 – pełna zgodność; 4 – "
     "drobne braki; 3 – połowa kluczowych punktów lub zła kolejność; 2 – większość braków; "
-    "1 – marginalna zgodność; 0 – odpowiedź błędna lub nie na temat. Zwróć WYŁĄCZNIE JSON: "
+    "1 – marginalna zgodność; 0 – odpowiedź błędna lub nie na temat. Zasady: najpierw wypisz "
+    "kolejno punkty odpowiedzi wzorcowej i każdy przypisz DOKŁADNIE do jednej listy – covered "
+    "albo missing (ten sam punkt nie może być w obu); w covered i missing umieszczaj tylko punkty "
+    "WZORCA, nie dodatkowe treści asystenta; punkt jest pokryty, gdy odpowiedź wyraża tę samą "
+    "myśl innymi słowami lub ogólniej, ale wciąż jednoznacznie. Zwróć WYŁĄCZNIE JSON: "
     '{"score": 0-5, "covered": ["punkty wzorca obecne w odpowiedzi"], '
     '"missing": ["punkty wzorca pominięte"], "order_ok": true|false, '
     '"errors": ["błędy lub zalecenia sprzeczne z wzorcem"], "comment": "1–2 zdania uzasadnienia"}'

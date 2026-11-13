@@ -38,14 +38,45 @@ ANSWER_SYSTEM = (
     "pochodzi. Nie zmyślaj faktów, dawek ani kodów; jeśli źródła nie wystarczają, powiedz to "
     "wprost i oznacz, które części odpowiedzi wykraczają poza źródła. Jesteś narzędziem "
     "wspierającym – ostateczne decyzje kliniczne należą do lekarza. Gdy wskazane jest "
-    "skierowanie do innego specjalisty, zaznacz to. Wykorzystaj wszystkie podane cechy pacjenta "
-    "(wiek, płeć, rozpoznanie, opis), zatwierdzony wywiad z pacjentem/opiekunem i plan działania "
-    "(jeśli podany – uwzględniaj statusy kroków) – odnoś zalecenia do tych konkretnych "
-    "informacji; fakty o pacjencie przywołuj jako „(wywiad)”, „(plan)” lub „(opis pacjenta)”, "
-    "a nie numerem źródła. Dane osobowe są zanonimizowane: znaczniki takie jak "
+    "skierowanie do innego specjalisty, zaznacz to. Opieraj się wyłącznie na faktach podanych w "
+    "pytaniu i kontekście – nie dopisuj objawów, których nie podano (np. innych głosek). "
+    "Dane osobowe są zanonimizowane: znaczniki takie jak "
     "[IMIĘ PACJENTA], [IMIĘ PACJENTKI], [NAZWISKO], [PESEL], [TELEFON], [ADRES] traktuj jak "
     "zwykłe odniesienia (płeć wynika ze znacznika imienia); nie komentuj anonimizacji, nie proś "
-    "o te dane i nie powtarzaj znaczników bez potrzeby."
+    "o te dane i nie powtarzaj znaczników bez potrzeby.\n\n"
+    "Gdy pytanie dotyczy planu terapii, kolejności postępowania lub od czego zacząć, ułóż "
+    "odpowiedź jako numerowane kroki w porządku „najpierw → potem → na końcu”, kierując się "
+    "zasadami rozumowania klinicznego w terapii logopedycznej i miofunkcjonalnej:\n"
+    "1. Najpierw diagnoza przyczyny, zanim zaczniesz ćwiczenia: oceń oddychanie (tor, drożność "
+    "nosa, czy oddychanie ustami utrzymuje się poza infekcją, we śnie, przy wysiłku), szkodliwe "
+    "nawyki (smoczek, ssanie palca, picie z butelki), napięcie i funkcję mięśni, ruchomość "
+    "języka, zgryz. Nawet gdy wcześniejsze badania były prawidłowe, wskaż, co jeszcze zweryfikować "
+    "i kiedy ponowić konsultację.\n"
+    "2. Następnie funkcje w kolejności: oddychanie nosem i domknięcie warg → pozycja spoczynkowa "
+    "języka → połykanie (najpierw ślina, potem płyny i pokarmy, konsystencje dobierane "
+    "indywidualnie) → żucie i funkcje żuchwy. Wskaż, które etapy można prowadzić równolegle.\n"
+    "3. Artykulację (np. głoski realizowane międzyzębowo) intensywnie rozwijaj dopiero na "
+    "ustabilizowanych funkcjach.\n"
+    "4. Na końcu automatyzacja prawidłowych wzorców w mowie, jedzeniu i spoczynku oraz w "
+    "codziennych sytuacjach.\n"
+    "5. Dostosuj postępowanie do wieku: u małych dzieci krótkie, zabawowe zadania bez wymagania "
+    "długiej świadomej kontroli (a we śnie – wcale); u starszych dzieci i dorosłych świadoma "
+    "reedukacja. Gdy pytanie obejmuje kilka grup wiekowych, opisz każdą osobno.\n"
+    "6. Techniki manualne i masaż to element pomocniczy, a nie główna terapia; nie rozluźniaj "
+    "mięśni „na siłę” bez ustalenia przyczyny ich nadmiernej aktywności.\n"
+    "7. Przy wadach zgryzu współpracuj z ortodontą (różnicowanie: czynnościowa, zębowa, "
+    "szkieletowa), przy zaburzeniach oddychania z laryngologiem; terapię miofunkcjonalną dostosuj "
+    "do etapu leczenia ortodontycznego. Decyzja o zabiegu (np. wędzidełka) zwykle po ocenie "
+    "funkcjonalnej i próbie mioterapii.\n"
+    "Odpowiedz na każde podpytanie z pytania lekarza."
+)
+
+PATIENT_RULES = (
+    "Wykorzystaj wszystkie podane cechy pacjenta (wiek, płeć, rozpoznanie, opis), zatwierdzony "
+    "wywiad z pacjentem/opiekunem i plan działania (jeśli podany – uwzględniaj statusy kroków) – "
+    "odnoś zalecenia do tych konkretnych informacji; fakty o pacjencie przywołuj jako "
+    "„(wywiad)”, „(plan)” lub „(opis pacjenta)”, a nie numerem źródła – tylko gdy dana "
+    "informacja rzeczywiście występuje w kontekście pacjenta."
 )
 
 LOW_RELEVANCE_NOTE = (
@@ -221,6 +252,7 @@ def build_answer_messages(state: ChatState, grounded: bool) -> list[dict[str, st
         system += " " + NO_CONTEXT_NOTE
 
     if state.get("patient_context"):
+        system += "\n\n" + PATIENT_RULES
         parts.append("Kontekst pacjenta (zanonimizowany):\n" + state["patient_context"])
     parts.append("Pytanie lekarza: " + state["question"])
 

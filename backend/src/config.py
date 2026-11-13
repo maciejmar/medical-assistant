@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     reranker_model: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
     retrieval_top_k: int = 12
-    rerank_top_n: int = 4
+    rerank_top_n: int = 6
     rerank_min_score: float = 0.02
     rerank_fallback_n: int = 2
     kb_max_upload_bytes: int = 20 * 1024 * 1024
