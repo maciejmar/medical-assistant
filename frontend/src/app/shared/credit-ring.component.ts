@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
-import { CreditStatus, creditLevel, formatPln } from '../core/billing.service';
+import { CreditStatus, creditLevel, formatCredits } from '../core/billing.service';
 
 const STROKE: Record<'ok' | 'warn' | 'exhausted', string> = {
   ok: 'stroke-brand-500',
@@ -30,7 +30,7 @@ export function percentLabel(percent: number): string {
       [attr.height]="size"
       [attr.viewBox]="'0 0 ' + size + ' ' + size"
       role="img"
-      [attr.aria-label]="'Wykorzystano ' + label() + ' kredytów (' + pln(status.used_pln) + ' z ' + pln(status.available_pln) + ')'"
+      [attr.aria-label]="'Wykorzystano ' + label() + ' kredytów (' + credits(status.used_credits, false) + ' z ' + credits(status.available_credits) + ')'"
     >
       <circle [attr.cx]="center" [attr.cy]="center" [attr.r]="radius" fill="none" class="stroke-slate-200" [attr.stroke-width]="stroke" />
       <circle
@@ -97,7 +97,7 @@ export class CreditRingComponent {
     return STROKE[creditLevel(this.status)];
   }
 
-  protected pln(value: number): string {
-    return formatPln(value);
+  protected credits(value: number, withWord = true): string {
+    return formatCredits(value, withWord);
   }
 }

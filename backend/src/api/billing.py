@@ -51,6 +51,11 @@ def _status_out(s: billing.CreditStatus) -> CreditStatusOut:
         available_pln=round(s.available_pln, 2),
         used_pln=round(s.used_pln, 2),
         remaining_pln=round(s.remaining_pln, 2),
+        limit_credits=billing.to_credits(s.limit_pln),
+        topups_credits=billing.to_credits(s.topups_pln),
+        available_credits=s.available_credits,
+        used_credits=s.used_credits,
+        remaining_credits=s.remaining_credits,
         percent=round(s.percent, 1),
         exhausted=s.exhausted,
     )
@@ -71,6 +76,7 @@ def _payment() -> PaymentDetailsOut:
         recipient=settings.topup_recipient,
         bank_account=settings.topup_bank_account,
         amounts=topup_amounts(),
+        credits_per_pln=settings.billing_credits_per_pln,
         online_enabled=payments.is_configured(),
         online_methods=payments.payment_methods() if payments.is_configured() else [],
     )

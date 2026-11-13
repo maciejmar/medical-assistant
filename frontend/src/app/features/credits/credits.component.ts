@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { BillingService, EXHAUSTED_MESSAGE, TopUp, formatPln } from '../../core/billing.service';
+import { BillingService, EXHAUSTED_MESSAGE, TopUp, creditsForPln, formatCredits, formatPln } from '../../core/billing.service';
 import { CreditMeterComponent } from '../../shared/credit-meter.component';
 import { CreditRingComponent } from '../../shared/credit-ring.component';
 
@@ -13,7 +13,7 @@ const STATUS_LABELS: Record<TopUp['status'], { label: string; css: string }> = {
   cancelled: { label: 'Anulowane', css: 'bg-slate-100 text-slate-600' },
 };
 
-/** Kredyty użytkownika: wykorzystanie w bieżącym oknie subskrypcji i doładowania przelewem. */
+/** Kredyty użytkownika: wykorzystanie w kredytach w bieżącym okresie i doładowania kupowane w zł. */
 @Component({
   selector: 'app-credits',
   standalone: true,
@@ -38,21 +38,23 @@ const STATUS_LABELS: Record<TopUp['status'], { label: string; css: string }> = {
             <app-credit-ring [status]="d.status" [size]="140" />
             <div class="w-full min-w-0 flex-1 space-y-3">
               <p class="text-center sm:text-left">
-                <span class="text-2xl font-bold tabular-nums text-slate-900">{{ pln(d.status.used_pln) }}</span>
-                <span class="text-slate-500"> z {{ pln(d.status.available_pln) }} wykorzystano</span>
+                <span class="text-2xl font-bold tabular-nums text-slate-900">{{ credits(d.status.used_credits, false) }}</span>
+                <span class="text-slate-500"> z {{ credits(d.status.available_credits) }} wykorzystano</span>
               </p>
               <app-credit-meter [status]="d.status" />
             </div>
           </div>
           <dl class="grid gap-3 text-sm sm:grid-cols-4">
-            <div><dt class="label">Limit miesięczny</dt><dd class="font-semibold">{{ pln(d.status.limit_pln) }}</dd></div>
-            <div><dt class="label">Doładowania</dt><dd class="font-semibold">{{ pln(d.status.topups_pln) }}</dd></div>
-            <div><dt class="label">Pozostało</dt><dd class="font-semibold">{{ pln(d.status.remaining_pln) }}</dd></div>
-            <div><dt class="label">Odnowienie limitu</dt><dd class="font-semibold">{{ d.status.window_end | date: 'dd.MM.yyyy HH:mm' }}</dd></div>
+            <div><dt class="label">Na start miesiąca</dt><dd class="font-semibold">{{ credits(d.status.limit_credits) }}</dd></div>
+            <div><dt class="label">Dokupione</dt><dd class="font-semibold">{{ credits(d.status.topups_credits) }}</dd></div>
+            <div><dt class="label">Pozostało</dt><dd class="font-semibold">{{ credits(d.status.remaining_credits) }}</dd></div>
+            <div><dt class="label">Odnowienie kredytów</dt><dd class="font-semibold">{{ d.status.window_end | date: 'dd.MM.yyyy HH:mm' }}</dd></div>
           </dl>
           <p class="text-xs text-slate-500">
             Okres rozliczeniowy: {{ d.status.window_start | date: 'dd.MM.yyyy' }} – {{ d.status.window_end | date: 'dd.MM.yyyy' }}
-            (co miesiąc od {{ d.status.started_at | date: 'd' }}. dnia). Koszt liczony jest z liczby tokenów według cennika modeli.
+            (co miesiąc od {{ d.status.started_at | date: 'd' }}. dnia). Na początku każdego okresu kredyty są zerowane i dostajesz
+            {{ credits(d.status.limit_credits) }}; niewykorzystane kredyty – także dokupione – nie przechodzą na kolejny miesiąc.
+            Zużycie liczone jest z liczby tokenów według cennika modeli.
           </p>
         </section>
 
@@ -62,16 +64,19 @@ const STATUS_LABELS: Record<TopUp['status'], { label: string; css: string }> = {
             <p class="rounded-lg px-3 py-2 text-sm" [class]="n.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'" role="status">{{ n.text }}</p>
           }
           <fieldset>
-            <legend class="label">Kwota</legend>
+            <legend class="label">Pakiet</legend>
             <div class="flex flex-wrap gap-3">
               @for (amount of d.payment.amounts; track amount) {
                 <button
                   type="button"
-                  class="min-w-[6rem] rounded-xl border-2 px-4 py-3 text-base font-semibold transition"
+                  class="flex min-w-[8rem] flex-col items-center rounded-xl border-2 px-4 py-3 transition"
                   [class]="selected() === amount ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300'"
                   [attr.aria-pressed]="selected() === amount"
                   (click)="selected.set(amount)"
-                >{{ pln(amount) }}</button>
+                >
+                  <span class="text-base font-semibold">{{ credits(packageCredits(amount)) }}</span>
+                  <span class="text-sm text-slate-500">{{ pln(amount) }}</span>
+                </button>
               }
             </div>
           </fieldset>
@@ -99,7 +104,7 @@ const STATUS_LABELS: Record<TopUp['status'], { label: string; css: string }> = {
                 <dt class="text-slate-500">Odbiorca</dt><dd class="font-medium">{{ d.payment.recipient }}</dd>
                 <dt class="text-slate-500">Numer konta</dt>
                 <dd class="font-mono font-medium">{{ d.payment.bank_account || 'numer konta przekaże administrator' }}</dd>
-                <dt class="text-slate-500">Kwota</dt><dd class="font-medium">{{ pln(t.amount_pln) }}</dd>
+                <dt class="text-slate-500">Kwota</dt><dd class="font-medium">{{ pln(t.amount_pln) }} ({{ credits(packageCredits(t.amount_pln)) }})</dd>
                 <dt class="text-slate-500">Tytuł przelewu</dt>
                 <dd class="flex items-center gap-2 font-mono font-medium">{{ t.reference }}
                   <button type="button" class="rounded px-1.5 py-0.5 font-sans text-xs text-brand-700 hover:bg-brand-100" (click)="copy(t.reference)">{{ copied() ? 'Skopiowano' : 'Kopiuj' }}</button>
@@ -116,7 +121,8 @@ const STATUS_LABELS: Record<TopUp['status'], { label: string; css: string }> = {
             <ul class="divide-y divide-slate-100 text-sm">
               @for (t of d.topups; track t.id) {
                 <li class="flex flex-wrap items-center gap-3 py-2">
-                  <span class="w-24 font-semibold tabular-nums">{{ pln(t.amount_pln) }}</span>
+                  <span class="w-32 font-semibold tabular-nums">{{ credits(packageCredits(t.amount_pln)) }}</span>
+                  <span class="text-xs tabular-nums text-slate-500">{{ pln(t.amount_pln) }}</span>
                   <span class="badge" [class]="label(t).css">{{ label(t).label }}</span>
                   <span class="font-mono text-xs text-slate-500">{{ t.reference }}</span>
                   <span class="ml-auto text-xs text-slate-500">{{ t.created_at | date: 'dd.MM.yyyy HH:mm' }}</span>
@@ -158,7 +164,7 @@ export class CreditsComponent implements OnInit {
         next: (t) => {
           this.paymentNotice.set(
             t.status === 'confirmed'
-              ? { ok: true, text: `Płatność przyjęta – dodano ${this.pln(t.amount_pln)} kredytów.` }
+              ? { ok: true, text: `Płatność przyjęta – dodano ${this.credits(this.packageCredits(t.amount_pln))}.` }
               : { ok: false, text: 'Płatność jest jeszcze przetwarzana – kredyty pojawią się po jej zaksięgowaniu.' },
           );
           this.api.refresh();
@@ -208,6 +214,15 @@ export class CreditsComponent implements OnInit {
     return formatPln(value);
   }
 
+  protected credits(value: number, withWord = true): string {
+    return formatCredits(value, withWord);
+  }
+
+  /** Ile kredytów daje pakiet za daną kwotę w zł (przelicznik z serwera). */
+  protected packageCredits(amountPln: number): number {
+    return creditsForPln(amountPln, this.data()?.payment.credits_per_pln ?? 100);
+  }
+
   protected label(t: TopUp) {
     return STATUS_LABELS[t.status] ?? STATUS_LABELS.pending;
   }
@@ -234,7 +249,7 @@ export class CreditsComponent implements OnInit {
   }
 
   protected cancel(t: TopUp): void {
-    if (!confirm(`Anulować zamówienie doładowania ${this.pln(t.amount_pln)}?`)) {
+    if (!confirm(`Anulować zamówienie ${this.credits(this.packageCredits(t.amount_pln))} (${this.pln(t.amount_pln)})?`)) {
       return;
     }
     this.api.cancelTopUp(t.id).subscribe({

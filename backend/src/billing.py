@@ -1,4 +1,9 @@
-"""Kredyty w złotówkach: przeliczanie tokenów na koszt, okna subskrypcji i model zastępczy.
+"""Kredyty: przeliczanie tokenów na koszt, okna subskrypcji i model zastępczy.
+
+Wewnętrznie wszystko liczone jest w złotówkach; klient widzi kredyty (BILLING_CREDITS_PER_PLN,
+domyślnie 1 kredyt = 0,01 zł), a doładowania kupuje w złotówkach. Na start każdego okna klient
+dostaje limit miesięczny (domyślnie 5 zł = 500 kredytów); niewykorzystane kredyty – także
+z doładowań – przepadają z końcem okna.
 
 Przelicznik (standard przy rozliczaniu API LLM): koszt = tokeny wejścia × cena wejścia
 + tokeny wyjścia × cena wyjścia (cennik dostawcy w USD za 1 mln tokenów) × kurs USD→PLN × marża.
@@ -72,6 +77,11 @@ def cost_pln(model: str, prompt_tokens: int, completion_tokens: int) -> float:
     return usd * settings.billing_usd_pln_rate * settings.billing_margin
 
 
+def to_credits(pln: float) -> int:
+    """Złotówki → kredyty (domyślnie 1 kredyt = 0,01 zł), zaokrąglone do pełnego kredytu."""
+    return round(pln * settings.billing_credits_per_pln)
+
+
 def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
 
@@ -106,6 +116,18 @@ class CreditStatus:
     @property
     def available_pln(self) -> float:
         return self.limit_pln + self.topups_pln
+
+    @property
+    def used_credits(self) -> int:
+        return to_credits(self.used_pln)
+
+    @property
+    def available_credits(self) -> int:
+        return to_credits(self.limit_pln) + to_credits(self.topups_pln)
+
+    @property
+    def remaining_credits(self) -> int:
+        return max(0, self.available_credits - self.used_credits)
 
     @property
     def remaining_pln(self) -> float:

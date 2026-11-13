@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter } from 'rxjs';
 import { AuthService } from '../core/auth.service';
-import { BillingService, formatPln } from '../core/billing.service';
+import { BillingService, formatCredits } from '../core/billing.service';
 import { CreditRingComponent } from './credit-ring.component';
 
 @Component({
@@ -51,12 +51,12 @@ import { CreditRingComponent } from './credit-ring.component';
           @if (auth.isPatient()) {
             <a routerLink="/patient" routerLinkActive="bg-brand-50 text-brand-700" class="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100" (click)="open.set(false)">Mój panel</a>
           }
-          @if (auth.canTreat() && billing.mine(); as credits) {
+          @if (auth.canTreat() && billing.mine(); as mine) {
             <a routerLink="/kredyty" class="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-slate-100 sm:ml-2" title="Kredyty – szczegóły i doładowanie" (click)="open.set(false)">
-              <app-credit-ring [status]="credits.status" [size]="40" />
+              <app-credit-ring [status]="mine.status" [size]="40" />
               <span class="leading-tight">
-                <span class="block text-[10px] font-semibold uppercase tracking-wide" [class]="credits.status.exhausted ? 'text-red-600' : 'text-slate-400'">Kredyty</span>
-                <span class="block text-xs font-semibold tabular-nums text-slate-700">{{ pln(credits.status.used_pln) }} / {{ pln(credits.status.available_pln) }}</span>
+                <span class="block text-[10px] font-semibold uppercase tracking-wide" [class]="mine.status.exhausted ? 'text-red-600' : 'text-slate-400'">Kredyty</span>
+                <span class="block text-xs font-semibold tabular-nums text-slate-700">{{ credits(mine.status.used_credits, false) }} / {{ credits(mine.status.available_credits, false) }}</span>
               </span>
             </a>
           }
@@ -75,8 +75,8 @@ export class NavbarComponent {
   protected readonly billing = inject(BillingService);
   protected readonly open = signal(false);
 
-  protected pln(value: number): string {
-    return formatPln(value);
+  protected credits(value: number, withWord = true): string {
+    return formatCredits(value, withWord);
   }
 
   constructor() {

@@ -66,9 +66,16 @@ async def test_status_counts_only_current_window(client, monkeypatch):
 
     body = (await client.get("/api/billing/me", headers=headers)).json()
     status = body["status"]
-    assert status["limit_pln"] == 20.0 and status["used_pln"] == pytest.approx(3.6)
-    assert status["remaining_pln"] == pytest.approx(16.4) and status["exhausted"] is False
+    assert status["limit_pln"] == 5.0 and status["used_pln"] == pytest.approx(3.6)
+    assert status["remaining_pln"] == pytest.approx(1.4) and status["exhausted"] is False
+    # Klient widzi kredyty: 1 kredyt = 0,01 zł, na start miesiąca 500 kredytów.
+    assert (status["limit_credits"], status["used_credits"], status["remaining_credits"]) == (
+        500,
+        360,
+        140,
+    )
     assert body["payment"]["amounts"] == [20.0, 50.0, 100.0]
+    assert body["payment"]["credits_per_pln"] == 100
 
 
 async def test_topup_order_confirmation_and_admin_controls(client, make_headers):
@@ -85,7 +92,7 @@ async def test_topup_order_confirmation_and_admin_controls(client, make_headers)
     assert order.json()["status"] == "pending"
     assert order.json()["reference"] == f"LOGOPED-{user.id}-{order.json()['id']}"
     me = (await client.get("/api/billing/me", headers=headers)).json()
-    assert me["status"]["available_pln"] == 20.0, "oczekujące doładowanie jeszcze nie liczy się"
+    assert me["status"]["available_pln"] == 5.0, "oczekujące doładowanie jeszcze nie liczy się"
 
     pending = (await client.get("/api/admin/billing/topups", headers=admin)).json()
     assert [t["id"] for t in pending] == [order.json()["id"]]
@@ -96,12 +103,13 @@ async def test_topup_order_confirmation_and_admin_controls(client, make_headers)
         await client.post(f"/api/admin/billing/topups/{order.json()['id']}/confirm", headers=admin)
     ).status_code == 409
     me = (await client.get("/api/billing/me", headers=headers)).json()
-    assert me["status"]["available_pln"] == 70.0
+    assert me["status"]["available_pln"] == 55.0
+    assert me["status"]["topups_credits"] == 5000 and me["status"]["available_credits"] == 5500
 
     patched = await client.patch(
-        f"/api/admin/billing/users/{user.id}", json={"monthly_limit_pln": 5}, headers=admin
+        f"/api/admin/billing/users/{user.id}", json={"monthly_limit_pln": 10}, headers=admin
     )
-    assert patched.json()["limit_pln"] == 5.0 and patched.json()["available_pln"] == 55.0
+    assert patched.json()["limit_pln"] == 10.0 and patched.json()["available_pln"] == 60.0
     manual = await client.post(
         f"/api/admin/billing/users/{user.id}/topups",
         json={"amount_pln": 10, "note": "rekompensata"},
@@ -112,7 +120,7 @@ async def test_topup_order_confirmation_and_admin_controls(client, make_headers)
     listing = (await client.get("/api/admin/billing/users", headers=admin)).json()
     roles = {row["email"]: row for row in listing}
     assert "pat@example.com" not in roles, "pacjenci nie mają wskaźnika kredytów"
-    assert roles["doc@example.com"]["status"]["available_pln"] == 65.0
+    assert roles["doc@example.com"]["status"]["available_pln"] == 70.0
     assert (await client.get("/api/admin/billing/users", headers=headers)).status_code == 403
 
     second = await client.post("/api/billing/topups", json={"amount_pln": 20}, headers=headers)

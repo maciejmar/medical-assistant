@@ -63,8 +63,10 @@ class Settings(BaseSettings):
     smtp_timeout_seconds: float = 20.0
     app_public_url: str = "http://localhost:8080"
 
-    # Kredyty (zł): koszt = tokeny × cena modelu (USD / 1 mln tokenów) × kurs USD→PLN × marża.
-    billing_default_limit_pln: float = 20.0
+    # Kredyty: koszt = tokeny × cena modelu (USD / 1 mln tokenów) × kurs USD→PLN × marża (zł);
+    # klient widzi kredyty (1 kredyt = 0,01 zł). Co miesiąc na start 500 kredytów = 5 zł.
+    billing_default_limit_pln: float = 5.0
+    billing_credits_per_pln: int = 100
     billing_usd_pln_rate: float = 3.70
     billing_margin: float = 1.0
     # Nadpisanie/uzupełnienie cennika: JSON {"model": [cena_wejścia, cena_wyjścia]} w USD za 1 mln.

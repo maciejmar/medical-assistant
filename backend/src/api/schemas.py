@@ -471,6 +471,12 @@ class CreditStatusOut(BaseModel):
     available_pln: float
     used_pln: float
     remaining_pln: float
+    # Widok klienta: kredyty (1 kredyt = 1/credits_per_pln zł).
+    limit_credits: int = 0
+    topups_credits: int = 0
+    available_credits: int = 0
+    used_credits: int = 0
+    remaining_credits: int = 0
     percent: float
     exhausted: bool
 
@@ -496,6 +502,7 @@ class PaymentDetailsOut(BaseModel):
     recipient: str
     bank_account: str
     amounts: list[float]
+    credits_per_pln: int = 100
     online_enabled: bool = False
     online_methods: list[str] = []
 

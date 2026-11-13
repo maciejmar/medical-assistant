@@ -72,7 +72,7 @@ async def create_checkout(
         "line_items[0][price_data][currency]": "pln",
         "line_items[0][price_data][unit_amount]": str(round(amount_pln * 100)),
         "line_items[0][price_data][product_data][name]": (
-            f"Kredyty Logoped Assistant – {amount_pln:.0f} zł"
+            f"Logoped Assistant – {round(amount_pln * settings.billing_credits_per_pln)} kredytów"
         ),
         "success_url": f"{base}/kredyty?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
         "cancel_url": f"{base}/kredyty?payment=cancelled",

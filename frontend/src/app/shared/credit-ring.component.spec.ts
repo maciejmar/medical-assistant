@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { CreditStatus } from '../core/billing.service';
+import { CreditStatus, creditsWord, formatCredits } from '../core/billing.service';
 import { CreditRingComponent, percentLabel } from './credit-ring.component';
 
 function status(used: number, available: number): CreditStatus {
@@ -12,6 +12,11 @@ function status(used: number, available: number): CreditStatus {
     available_pln: available,
     used_pln: used,
     remaining_pln: Math.max(0, available - used),
+    limit_credits: available * 100,
+    topups_credits: 0,
+    available_credits: available * 100,
+    used_credits: used * 100,
+    remaining_credits: Math.max(0, available - used) * 100,
     percent: Math.min(100, (100 * used) / available),
     exhausted: used >= available,
   };
@@ -38,5 +43,17 @@ describe('CreditRingComponent', () => {
     expect(arc.getAttribute('class')).toContain('stroke-amber-500');
     expect(el.querySelector('text')!.textContent).toBe('80%');
     expect(el.querySelector('svg')!.getAttribute('aria-label')).toContain('Wykorzystano 80%');
+    expect(el.querySelector('svg')!.getAttribute('aria-label')).toContain('1 600 z 2 000 kredytów');
+  });
+});
+
+describe('formatCredits', () => {
+  it('odmienia i grupuje tysiące', () => {
+    expect([1, 2, 4, 5, 12, 22, 25, 500].map(creditsWord)).toEqual([
+      'kredyt', 'kredyty', 'kredyty', 'kredytów', 'kredytów', 'kredyty', 'kredytów', 'kredytów',
+    ]);
+    expect(formatCredits(500)).toBe('500 kredytów');
+    expect(formatCredits(2000)).toBe('2 000 kredytów');
+    expect(formatCredits(1234567, false)).toBe('1 234 567');
   });
 });

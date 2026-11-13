@@ -10,16 +10,21 @@ const DATA: MyCredits = {
     started_at: '2026-10-14T09:00:00Z',
     window_start: '2026-11-14T09:00:00Z',
     window_end: '2026-12-14T09:00:00Z',
-    limit_pln: 20,
+    limit_pln: 5,
     topups_pln: 0,
-    available_pln: 20,
-    used_pln: 21.5,
+    available_pln: 5,
+    used_pln: 5.25,
     remaining_pln: 0,
+    limit_credits: 500,
+    topups_credits: 0,
+    available_credits: 500,
+    used_credits: 525,
+    remaining_credits: 0,
     percent: 100,
     exhausted: true,
   },
   topups: [],
-  payment: { recipient: 'Webaby', bank_account: '12 3456 7890', amounts: [20, 50, 100], online_enabled: true, online_methods: ['blik', 'card'] },
+  payment: { recipient: 'Webaby', bank_account: '12 3456 7890', amounts: [20, 50, 100], credits_per_pln: 100, online_enabled: true, online_methods: ['blik', 'card'] },
 };
 
 describe('CreditsComponent', () => {
@@ -40,8 +45,14 @@ describe('CreditsComponent', () => {
     const meter = el.querySelector('[role="progressbar"]')!;
     expect(meter.getAttribute('aria-valuenow')).toBe('100');
 
+    // Klient widzi kredyty, nie złotówki; pakiety – cena w zł i liczba kredytów.
+    expect(el.textContent).toContain('525 z 500 kredytów wykorzystano');
+    expect(el.textContent).not.toContain('5,25');
     const amounts = Array.from(el.querySelectorAll('fieldset button')) as HTMLButtonElement[];
     expect(amounts.length).toBe(3);
+    expect(amounts[0].textContent).toContain('2 000 kredytów');
+    expect(amounts[0].textContent).toContain('20,00');
+    expect(amounts[2].textContent).toContain('10 000 kredytów');
     amounts[1].click();
     fixture.detectChanges();
     expect(el.textContent).toContain('BLIK, karta');

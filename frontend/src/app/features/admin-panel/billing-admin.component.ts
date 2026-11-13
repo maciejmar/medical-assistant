@@ -63,7 +63,7 @@ import { CreditMeterComponent } from '../../shared/credit-meter.component';
                   <span class="block text-xs text-slate-500">{{ u.email }} · {{ roleLabel(u.role) }}</span>
                 </td>
                 <td class="w-56 py-2 pr-3">
-                  <app-credit-meter [status]="u.status" />
+                  <app-credit-meter [status]="u.status" unit="pln" />
                   @if (u.status.exhausted) {
                     <span class="mt-1 inline-block text-[11px] font-semibold text-red-600">Model zastępczy</span>
                   }

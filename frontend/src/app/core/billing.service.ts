@@ -11,6 +11,12 @@ export interface CreditStatus {
   available_pln: number;
   used_pln: number;
   remaining_pln: number;
+  /** Widok klienta – kredyty (1 kredyt = 0,01 zł). */
+  limit_credits: number;
+  topups_credits: number;
+  available_credits: number;
+  used_credits: number;
+  remaining_credits: number;
   percent: number;
   exhausted: boolean;
 }
@@ -30,6 +36,8 @@ export interface PaymentDetails {
   recipient: string;
   bank_account: string;
   amounts: number[];
+  /** Ile kredytów za 1 zł (domyślnie 100: 1 kredyt = 0,01 zł). */
+  credits_per_pln: number;
   online_enabled: boolean;
   online_methods: string[];
 }
@@ -52,6 +60,29 @@ const PLN = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN',
 
 export function formatPln(value: number): string {
   return PLN.format(value);
+}
+
+/** Odmiana: 1 kredyt, 2–4 kredyty (bez 12–14), pozostałe – kredytów. */
+export function creditsWord(value: number): string {
+  const n = Math.abs(Math.round(value));
+  if (n === 1) {
+    return 'kredyt';
+  }
+  const last = n % 10;
+  const lastTwo = n % 100;
+  return last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14) ? 'kredyty' : 'kredytów';
+}
+
+/** „1 250 kredytów” – klient widzi kredyty, nie złotówki. */
+export function formatCredits(value: number, withWord = true): string {
+  // Separator tysięcy (twarda spacja) także dla 4 cyfr: „2 000 / 5 500”, nie „2000 / 5500”.
+  const grouped = String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return withWord ? `${grouped} ${creditsWord(value)}` : grouped;
+}
+
+/** Ile kredytów za kwotę doładowania w złotówkach. */
+export function creditsForPln(amountPln: number, creditsPerPln = 100): number {
+  return Math.round(amountPln * creditsPerPln);
 }
 
 /** Poziom wskaźnika: ok < 75% ≤ warn < 100% ≤ exhausted. */

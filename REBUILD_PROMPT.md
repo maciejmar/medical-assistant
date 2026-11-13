@@ -283,7 +283,12 @@ Konto niepowiązane z kartą → komunikat 404.
   (wiadomości wysłane do modelu i odpowiedź). Retencja `LLM_LOG_RETENTION_DAYS` (czyszczenie przy starcie).
 - **`/admin/knowledge`** – baza wiedzy RAG (sekcja 10).
 
-## 9a. Kredyty (zł), subskrypcja i model zastępczy (`src/billing.py`, `api/billing.py`)
+## 9a. Kredyty, subskrypcja i model zastępczy (`src/billing.py`, `api/billing.py`)
+
+- **Jednostki:** wewnętrznie wszystko w zł; klient widzi **kredyty** (`BILLING_CREDITS_PER_PLN=100` → 1 kredyt = 0,01 zł,
+  `billing.to_credits()`), a doładowania kupuje w zł. Co miesiąc na start `BILLING_DEFAULT_LIMIT_PLN=5` = **500 kredytów**.
+  `CreditStatusOut` ma pola `*_pln` (admin) i `limit/topups/available/used/remaining_credits` (klient; dostępne =
+  kredyty limitu + kredyty doładowań, pozostało = dostępne − zużyte); `PaymentDetailsOut.credits_per_pln`.
 
 - **Przelicznik:** koszt = (tokeny wejścia × cena wejścia + tokeny wyjścia × cena wyjścia) / 1 mln × `BILLING_USD_PLN_RATE`
   × `BILLING_MARGIN` – standard rozliczeń API (cennik dostawcy w USD za 1 mln tokenów). Cennik `DEFAULT_PRICES`
@@ -292,7 +297,8 @@ Konto niepowiązane z kartą → komunikat 404.
   model spoza cennika (lokalna Gemma) = 0 zł. `stt.py` zapisuje sekundy z `usage: {type: duration}` odpowiedzi Whisper.
 - **Okno:** miesięczne od `started_at` (rocznica liczona zawsze od daty startu – bez dryfu; 31. → ostatni dzień krótszego
   miesiąca). Zużycie = suma `token_usage` użytkownika w oknie, więc limit „zeruje się” sam z początkiem nowego okna.
-  Dostępne = limit + doładowania potwierdzone w tym oknie.
+  Dostępne = limit + doładowania potwierdzone w tym oknie – niewykorzystane kredyty (także dokupione) przepadają
+  z końcem okna (UI informuje o tym na stronie Kredyty).
 - **Po wyczerpaniu:** `llm._create_chat` → `billing.use_local_model(user_id)` (cache 30 s, `invalidate()` po zmianach)
   kieruje czat (przepisanie zapytania i odpowiedź) do `LOCAL_LLM_BASE_URL`/`LOCAL_LLM_MODEL` (Ollama, OpenAI-compatible);
   gdy model lokalny nie odpowiada – awaryjnie model podstawowy. Embeddingi (wymiar wektorów Qdrant) i transkrypcja
@@ -310,11 +316,14 @@ Konto niepowiązane z kartą → komunikat 404.
   `rejected`. Powrót `/kredyty?payment=success&session_id=…` → `POST /billing/checkout/sync` (odczyt sesji z API, gdy
   webhook się spóźnia), `payment=cancelled` → komunikat; parametry usuwane z adresu. Zamówienia online nie liczą się
   do limitu 3 oczekujących przelewów i nie trafiają na listę „do potwierdzenia” admina. Bez `STRIPE_SECRET_KEY`
-  (`online_enabled=false`) – tylko przelew tradycyjny. UI: wybór kwoty (20/50/100) + „Zapłać online” / „Przelew tradycyjny”.
+  (`online_enabled=false`) – tylko przelew tradycyjny. UI: wybór pakietu – kafel „2 000 kredytów / 20,00 zł” (50 zł =
+  5 000, 100 zł = 10 000) + „Zapłać online” / „Przelew tradycyjny”; nazwa pozycji w Stripe „Logoped Assistant – N kredytów”.
 - **Wskaźnik:** `shared/credit-ring.component.ts` – kółko SVG z procentem w środku (łuk ∝ zużyciu, śladowe zużycie jako
-  kropka i „<1%”, `role=img` z opisem kwot) oraz `shared/credit-meter.component.ts` – pasek + „zużyte / dostępne zł”;
-  kolor obu: brand < 75% ≤ amber < 100% ≤ red. W pasku nawigacji kółko 40 px + „KREDYTY / zużyte / dostępne zł”,
-  na stronie Kredyty kółko 140 px + kwota + pasek;
+  kropka i „<1%”, `role=img` z opisem w kredytach) oraz `shared/credit-meter.component.ts` – pasek + „zużyte / dostępne
+  kredytów” (`unit="pln"` w panelu admina – tam limity ustawia się w zł);
+  kolor obu: brand < 75% ≤ amber < 100% ≤ red. W pasku nawigacji kółko 40 px + „KREDYTY / zużyte / dostępne”
+  (kredyty), na stronie Kredyty kółko 140 px + liczba kredytów + pasek; `formatCredits()` (twarda spacja tysięcy,
+  odmiana kredyt/kredyty/kredytów);
   w pasku nawigacji lekarza/admina (link do `/kredyty`, odświeżany przy każdej nawigacji i po odpowiedzi czatu),
   na stronie Kredyty i w panelu admina (`billing-admin.component.ts`: doładowania do potwierdzenia, tabela kont lekarzy
   i adminów z wykorzystaniem, oknem, edycją limitu i daty startu subskrypcji, doładowaniem ręcznym). Pacjenci – bez wskaźnika.
@@ -437,7 +446,7 @@ jako 600); tło `body` – gradient `#c8e4dd → #1f052e`; karty dashboardu/asys
 `VLLM_BASE_URL`, `VLLM_API_KEY`, `VLLM_CHAT_MODEL` (np. Qwen/Qwen2.5-7B-Instruct), `VLLM_EMBEDDING_MODEL`
 (np. BAAI/bge-m3), `WHISPER_API_URL`, `WHISPER_API_KEY`, `WHISPER_MODEL`, `POSTGRES_USER/PASSWORD/DB` (DB_URL
 budowany w compose), `JWT_SECRET` (≥ 32 zn.), `ACCESS_TOKEN_EXPIRE_MINUTES`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`,
-`CORS_ORIGINS`, `RERANKER_MODEL`, `RETRIEVAL_TOP_K`, `RERANK_TOP_N`, `RERANK_MIN_SCORE`, `RERANK_FALLBACK_N`,
+`CORS_ORIGINS`, `RERANKER_MODEL`, `RETRIEVAL_TOP_K`, `RERANK_TOP_N`, `RERANK_MIN_SCORE`, `RERANK_FALLBACK_N`, `BILLING_CREDITS_PER_PLN`,
 `LLM_LOG_ENABLED`, `LLM_LOG_RETENTION_DAYS`, `SMTP_HOST/PORT/USER/PASSWORD/FROM/STARTTLS/SSL`, `APP_PUBLIC_URL`,
 `KB_SOURCE_HOST_DIR`, `KB_SCAN_INTERVAL_SECONDS`, `KB_SESSION_GAP_MINUTES`, `OCR_*`, `SEED_ON_STARTUP`.
 Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/opt/logoped-assist.env`, chmod 600).
@@ -482,6 +491,9 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-13** – Klient rozliczany w kredytach (1 kredyt = 0,01 zł): co miesiąc od początku pierwszego okresu kredyty
+  są zerowane i klient dostaje 500 kredytów (domyślny limit 20 zł → 5 zł); zużycie, licznik w nawigacji i strona Kredyty
+  pokazują kredyty zamiast zł; doładowania nadal kupowane w zł, każdy pakiet pokazuje liczbę kredytów; panel admina w zł.
 - **2026-11-13** – Poprawa jakości wg goldsetu (przebieg #1 ≈ 3,5/5): instrukcje „(wywiad)/(plan)/(opis pacjenta)”
   wydzielone do `PATIENT_RULES` i dołączane tylko z kontekstem pacjenta (bez niego model zmyślał takie odnośniki);
   zasady rozumowania klinicznego i zakaz dopisywania objawów w `ANSWER_SYSTEM`; `RERANK_TOP_N` 4 → 6; sędzia goldsetu

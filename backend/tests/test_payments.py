@@ -106,7 +106,7 @@ async def test_blik_payment_confirms_credits_automatically(client, stripe, make_
     assert (await _webhook(client, _completed(session))).status_code == 200
     assert (await _webhook(client, _completed(session))).status_code == 200  # ponowienie
     me = (await client.get("/api/billing/me", headers=doctor)).json()
-    assert me["status"]["available_pln"] == 70.0, "doliczone dokładnie raz"
+    assert me["status"]["available_pln"] == 55.0, "doliczone dokładnie raz"
     assert me["topups"][0]["status"] == "confirmed"
 
 
@@ -124,7 +124,7 @@ async def test_amount_mismatch_and_expiry_do_not_add_credits(client, stripe):
     await _webhook(client, expired)
 
     me = (await client.get("/api/billing/me", headers=doctor)).json()
-    assert me["status"]["available_pln"] == 20.0
+    assert me["status"]["available_pln"] == 5.0
     statuses = {t["amount_pln"]: t["status"] for t in me["topups"]}
     assert statuses == {20.0: "pending", 100.0: "cancelled"}
 
