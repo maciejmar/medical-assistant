@@ -262,8 +262,9 @@ Konto niepowiązane z kartą → komunikat 404.
   ciąża i poród, rozwój ruchowy i mowy, karmienie, oddychanie, słuch, choroby/operacje, zgryz i nawyki, wywiad rodzinny,
   środowisko językowe, lateralizacja, dotychczasowa terapia, funkcjonowanie emocjonalno-społeczne, oczekiwania).
 - **`/admin/testy` – Testy jakości (goldset)** (`src/goldset.py`, `api/goldset.py`, `goldset.component.ts`):
-  import goldsetu z wklejonego tekstu (`parse_goldset`: najpierw pytania „N. Tytuł” + treść, potem druga numeracja od 1 =
-  odpowiedzi wzorcowe; nagłówek = numer zgodny z oczekiwanym, spacja po kropce, w części odpowiedzi bez kropki na końcu;
+  import goldsetu z wklejonego tekstu (`parse_goldset`: najpierw pytania „N. Tytuł” + treść, potem druga numeracja od 1 albo
+  nagłówki „adN.” = odpowiedzi wzorcowe (w trybie „adN.” tylko takie wiersze są nagłówkami; wstęp przed odpowiedziami
+  odcinany od ostatniego pytania – akapity po ostatnim „?”); nagłówek = numer zgodny z oczekiwanym, spacja po kropce, w części odpowiedzi bez kropki na końcu;
   kroki „1.<TAB>…” są treścią i zamieniane na „1. …”; tytuł łamany na dwie linie sklejany; łamane wiersze pytań łączone
   w akapity) → podgląd → „Zapisz goldset” (zastępuje; wyniki historyczne zostają, bo mają kopie pytań); edycja/usuwanie
   pozycji. „Uruchom test” (jeden naraz, w tle, `asyncio` task; postęp przez odpytywanie co 3 s; „Zatrzymaj”; przebieg
@@ -478,6 +479,9 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-13** – Import goldsetu akceptuje odpowiedzi z nagłówkami „ad1.”, „ad2.”… (wcześniej tylko druga numeracja
+  „1. Tytuł” – tekst w formacie „adN.” kończył się błędem „Nie rozpoznano par”); wstęp „Jasne. Uporządkuję…” nie
+  dokleja się do ostatniego pytania; wielokrotne spacje po numerze kroku normalizowane.
 - **2026-11-10** – Ostrzeżenie „termin zajęty” przy wizycie nachodzącej na inną (sprawdzane na serwerze dla wszystkich
   pacjentów lekarza) z opcją „Zmień termin” lub świadomego „Zapisz mimo to”.
 - **2026-11-10** – Zakładka „Kalendarz” lekarza: wszystkie wydarzenia pacjentów w jednym widoku (tydzień z siatką

@@ -49,6 +49,40 @@ def test_parser_splits_questions_and_reference_answers():
     assert items[1]["reference_answer"].startswith("Najpierw:\n1. Obserwacja żuchwy")
 
 
+AD_SAMPLE = """Pytania
+1. Chłopiec 4,5 roku – język
+Chłopiec nie utrzymuje pozycji języka.
+Od czego zacząć?
+2. Kolejność nauki połykania
+Jaka powinna być kolejność?
+
+Jasne. Uporządkuję to jako „najpierw → potem”.
+ad1. Chłopiec 4,5 roku – język
+1.\tSprawdzić oddychanie.
+2.\tPracować nad pozycją języka
+ad2. Kolejność nauki połykania
+
+Lepsza kolejność:
+1.  Najpierw: przygotowanie pozycji języka.
+7.  Na końcu automatyzacja wzorca,
+"""
+
+
+def test_parser_accepts_ad_headings_for_answers():
+    items = goldset.parse_goldset(AD_SAMPLE)
+    assert [i["title"] for i in items] == ["Chłopiec 4,5 roku – język", "Kolejność nauki połykania"]
+    assert items[1]["question"] == "Jaka powinna być kolejność?"  # bez wstępu „Jasne…”
+    assert items[0]["reference_answer"].splitlines() == [
+        "1. Sprawdzić oddychanie.",
+        "2. Pracować nad pozycją języka",
+    ]
+    assert items[1]["reference_answer"].splitlines() == [
+        "Lepsza kolejność:",
+        "1. Najpierw: przygotowanie pozycji języka.",
+        "7. Na końcu automatyzacja wzorca,",
+    ]
+
+
 def test_verdict_parsing_clamps_score():
     verdict = goldset.parse_verdict('ok {"score": 7, "missing": ["a"], "order_ok": false}')
     assert verdict["score"] == 5.0 and verdict["missing"] == ["a"] and verdict["order_ok"] is False

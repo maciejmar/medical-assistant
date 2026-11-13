@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 # Nagłówek pozycji: „7. Tytuł” (spacja po kropce). Kroki odpowiedzi „1.<TAB>Treść.” są treścią.
 _HEADING = re.compile(r"^(\d{1,3})\.[  ]+(\S.*)$")
 
+# Nagłówek odpowiedzi w stylu „ad1. Tytuł” / „Ad. 2 – Tytuł” / „ad 3)”.
+_AD_HEADING = re.compile(r"^ad\.?\s*(\d{1,3})\s*[.):]?(?:\s+.*)?$", re.IGNORECASE)
+
+
+def _ad_heading(line: str) -> int | None:
+    match = _AD_HEADING.match(line.strip())
+    return int(match.group(1)) if match else None
+
 
 def _is_heading(line: str, expected: int, in_answers: bool) -> tuple[bool, str]:
     if "\t" in line:
@@ -55,23 +63,35 @@ def _join_question(lines: list[str]) -> str:
 
 def _join_answer(lines: list[str]) -> str:
     """Odpowiedź wzorcowa: zachowuje kroki w osobnych wierszach („1.<TAB>x” → „1. x”)."""
-    cleaned = [re.sub(r"^(\d+)\.\s*\t\s*", r"\1. ", line.rstrip()) for line in lines]
+    cleaned = [re.sub(r"^(\d+)\.[ \t ]+", r"\1. ", line.rstrip()) for line in lines]
     return "\n".join(line for line in cleaned if line.strip()).strip()
 
 
 def parse_goldset(text: str) -> list[dict[str, Any]]:
     """Format: najpierw pytania „1. Tytuł” + treść, potem odpowiedzi „1. Tytuł” + kroki.
-    Druga seria numeracji od 1 rozpoczyna odpowiedzi; tekst przed pierwszym nagłówkiem jest
-    pomijany. Zwraca listę {number, title, question, reference_answer} do podglądu i poprawek."""
+    Druga seria numeracji od 1 (albo nagłówki „ad1.”, „ad2.”…) rozpoczyna odpowiedzi; tekst przed
+    pierwszym nagłówkiem jest pomijany. Zwraca listę {number, title, question, reference_answer}
+    do podglądu i poprawek."""
     questions: list[dict[str, Any]] = []
     answers: dict[int, list[str]] = {}
     in_answers = False
+    ad_mode = False  # odpowiedzi oznaczone „adN.” – wtedy tylko takie wiersze są nagłówkami
     expected = 1
     current: list[str] | None = None
     current_number = 0
 
     for raw in text.splitlines():
         line = raw.rstrip("\r")
+        ad_number = _ad_heading(line) if questions else None
+        if ad_number is not None and (ad_mode or not in_answers):
+            in_answers = ad_mode = True
+            current_number, current = ad_number, []
+            answers[ad_number] = current
+            continue
+        if ad_mode:
+            if current is not None:
+                current.append(line)
+            continue
         if not in_answers and questions and expected != 1:
             restart, title = _is_heading(line, 1, in_answers=True)
             if restart:
@@ -105,11 +125,17 @@ def parse_goldset(text: str) -> list[dict[str, Any]]:
             and not body[0].strip().endswith(("?", "."))
         ):
             title = f"{title} {body.pop(0).strip()}"
+        question = _join_question(body)
+        if q is questions[-1] and "?" in question:
+            # Wstęp przed odpowiedziami („Jasne. Uporządkuję to…”) nie należy do pytania.
+            paragraphs = question.split("\n")
+            last = max(i for i, p in enumerate(paragraphs) if "?" in p)
+            question = "\n".join(paragraphs[: last + 1])
         items.append(
             {
                 "number": q["number"],
                 "title": title,
-                "question": _join_question(body),
+                "question": question,
                 "reference_answer": _join_answer(answers.get(q["number"], [])),
             }
         )
