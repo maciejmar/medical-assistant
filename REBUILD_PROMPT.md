@@ -491,6 +491,8 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-16** – Logo Webaby w pasku nawigacji nie rozciąga się w pionie: link `shrink-0`, obrazek `max-w-none
+  object-contain` (ciasny flex zwężał szerokość przy stałej wysokości `h-16`); to samo zabezpieczenie w stopce.
 - **2026-11-13** – Klient rozliczany w kredytach (1 kredyt = 0,01 zł): co miesiąc od początku pierwszego okresu kredyty
   są zerowane i klient dostaje 500 kredytów (domyślny limit 20 zł → 5 zł); zużycie, licznik w nawigacji i strona Kredyty
   pokazują kredyty zamiast zł; doładowania nadal kupowane w zł, każdy pakiet pokazuje liczbę kredytów; panel admina w zł.

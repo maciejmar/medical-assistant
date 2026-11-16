@@ -62,8 +62,9 @@ import { CreditRingComponent } from './credit-ring.component';
           }
           <span class="px-3 py-1 text-xs text-slate-500 sm:ml-2">{{ auth.user()?.full_name }}</span>
           <button type="button" class="btn-secondary" (click)="auth.logout()">Wyloguj</button>
-          <a href="https://webaby.io" target="_blank" rel="noopener noreferrer" class="px-3 py-1 sm:ml-3 sm:border-l sm:border-slate-200 sm:pl-5" aria-label="Webaby – twórca aplikacji">
-            <img src="assets/images/webabylogo-mark.png" alt="Webaby" width="45" height="64" class="h-16 w-auto opacity-80 transition hover:opacity-100" />
+          <a href="https://webaby.io" target="_blank" rel="noopener noreferrer" class="shrink-0 px-3 py-1 sm:ml-3 sm:border-l sm:border-slate-200 sm:pl-5" aria-label="Webaby – twórca aplikacji">
+            <!-- shrink-0 + max-w-none: ciasny pasek nie może zwęzić logo przy stałej wysokości (rozciągnięcie w pionie). -->
+            <img src="assets/images/webabylogo-mark.png" alt="Webaby" width="45" height="64" class="h-16 w-auto max-w-none object-contain opacity-80 transition hover:opacity-100" />
           </a>
         </nav>
       </div>
