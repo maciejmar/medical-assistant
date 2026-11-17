@@ -115,19 +115,44 @@ export function searchKey(text: string): string {
             W katalogu: {{ matchedCount() }} z {{ matches().length }}
             @if (matchedCount() < matches().length) { <span class="text-amber-700">– brakuje {{ matches().length - matchedCount() }}</span> }
           </p>
+          <p class="text-xs text-slate-500">
+            Gdy ćwiczenie jest w katalogu pod inną nazwą (np. „guzik – opór w centrum” = „Guzik – centrum”) albo dopasowanie jest
+            błędne, kliknij „Przypisz” i wybierz właściwe ćwiczenie – nazwa z listy zostanie zapamiętana.
+          </p>
           <ul class="divide-y divide-slate-100 text-sm">
-            @for (m of matches(); track $index) {
+            @for (m of matches(); track i; let i = $index) {
               <li class="py-1.5">
-                @if (m.exercise; as ex) {
-                  <details>
-                    <summary class="cursor-pointer">
-                      <span class="font-semibold text-emerald-700">✓</span> {{ m.name }}
-                      <span class="text-xs text-slate-500">→ {{ ex.name }} ({{ ex.document_title }}{{ ex.page ? ', s. ' + ex.page : '' }}){{ m.score < 1 ? ' · dopasowanie ' + (m.score * 100 | number: '1.0-0') + '%' : '' }}</span>
-                    </summary>
-                    <p class="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-700">{{ ex.description || ex.goal }}</p>
-                  </details>
-                } @else {
-                  <span class="font-semibold text-red-600">✗</span> {{ m.name }} <span class="text-xs text-slate-500">– brak w katalogu</span>
+                <div class="flex items-start gap-2">
+                  <div class="min-w-0 flex-1">
+                    @if (m.exercise; as ex) {
+                      <details>
+                        <summary class="cursor-pointer">
+                          <span class="font-semibold text-emerald-700">✓</span> {{ m.name }}
+                          <span class="text-xs text-slate-500">→ {{ ex.name }} ({{ ex.document_title }}{{ ex.page ? ', s. ' + ex.page : '' }}){{ m.alias ? ' · przypisane ręcznie' : m.score < 1 ? ' · dopasowanie ' + (m.score * 100 | number: '1.0-0') + '%' : '' }}</span>
+                        </summary>
+                        <p class="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-700">{{ ex.description || ex.goal }}</p>
+                      </details>
+                    } @else {
+                      <span class="font-semibold text-red-600">✗</span> {{ m.name }} <span class="text-xs text-slate-500">– brak w katalogu</span>
+                    }
+                  </div>
+                  <button type="button" class="shrink-0 text-xs font-medium text-brand-700 hover:underline" (click)="openPicker(i, m.name)">
+                    {{ m.exercise ? 'Zmień' : 'Przypisz' }}
+                  </button>
+                </div>
+                @if (pickerFor() === i) {
+                  <div class="mt-2 space-y-1 rounded-lg border border-brand-200 bg-brand-50/40 p-2">
+                    <input class="field !py-1 text-xs" [value]="pickerQuery()" (input)="pickerQuery.set($any($event.target).value)" placeholder="Szukaj ćwiczenia w katalogu…" aria-label="Szukaj ćwiczenia do przypisania" />
+                    @for (ex of pickerResults(); track ex.id) {
+                      <button type="button" class="block w-full rounded px-2 py-1 text-left text-xs hover:bg-white" (click)="assign(ex, m.name)">
+                        <span class="font-medium">{{ ex.name }}</span>
+                        <span class="text-slate-500"> – {{ ex.document_title }}{{ ex.page ? ', s. ' + ex.page : '' }}</span>
+                      </button>
+                    } @empty {
+                      <p class="px-2 text-xs text-slate-500">Brak wyników – wpisz inną część nazwy.</p>
+                    }
+                    <button type="button" class="px-2 text-xs text-slate-500 hover:underline" (click)="pickerFor.set(null)">Anuluj</button>
+                  </div>
                 }
               </li>
             }
@@ -174,6 +199,16 @@ export function searchKey(text: string): string {
                       @if (ex.verified) { <span class="badge ml-1 bg-emerald-100 text-emerald-800">sprawdzone</span> }
                       @if (!ex.complete) { <span class="badge ml-1 bg-amber-100 text-amber-800">opis może być ucięty</span> }
                     </summary>
+                    @if (ex.aliases.length) {
+                      <div class="mt-2 flex flex-wrap items-center gap-1 text-xs">
+                        <span class="text-slate-500">Inne nazwy:</span>
+                        @for (a of ex.aliases; track a.id) {
+                          <span class="badge bg-brand-50 text-brand-800">{{ a.alias }}
+                            <button type="button" class="ml-1 text-slate-400 hover:text-red-600" (click)="removeAlias(ex, a.id)" [attr.aria-label]="'Usuń nazwę ' + a.alias">×</button>
+                          </span>
+                        }
+                      </div>
+                    }
                     <dl class="mt-2 space-y-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
                       @if (ex.goal) { <div><dt class="inline font-semibold">Cel: </dt><dd class="inline">{{ ex.goal }}</dd></div> }
                       @if (ex.tools) { <div><dt class="inline font-semibold">Narzędzia: </dt><dd class="inline">{{ ex.tools }}</dd></div> }
@@ -211,6 +246,21 @@ export class ExercisesComponent implements OnInit {
   protected readonly error = signal<string | null>(null);
   protected readonly running = computed(() => (this.job()?.status === 'running' ? this.job() : null));
   protected readonly matchedCount = computed(() => this.matches().filter((m) => m.exercise).length);
+  protected readonly pickerFor = signal<number | null>(null);
+  protected readonly pickerQuery = signal('');
+  /** Do 8 ćwiczeń z katalogu zawierających wszystkie wpisane słowa (bez diakrytyków). */
+  protected readonly pickerResults = computed(() => {
+    const words = searchKey(this.pickerQuery()).split(/[^a-z0-9]+/).filter((w) => w.length > 1);
+    if (!words.length) {
+      return [];
+    }
+    return this.items()
+      .filter((e) => {
+        const name = searchKey(e.name);
+        return words.every((w) => name.includes(w));
+      })
+      .slice(0, 8);
+  });
   protected readonly filtered = computed(() => {
     const q = searchKey(this.query().trim());
     return this.items().filter((e) => (!q || searchKey(e.name).includes(q)) && (!this.onlyUnverified() || !e.verified));
@@ -281,6 +331,38 @@ export class ExercisesComponent implements OnInit {
         this.matches.set([]);
         this.error.set(apiError(err, 'Nie udało się sprawdzić listy.'));
       },
+    });
+  }
+
+  /** Otwiera wyszukiwarkę z pierwszym znaczącym słowem nazwy („„guzik” – opór…” → „guzik”). */
+  protected openPicker(index: number, name: string): void {
+    const first = searchKey(name).split(/[^a-z0-9]+/).find((w) => w.length > 2) ?? '';
+    this.pickerFor.set(index);
+    this.pickerQuery.set(first);
+  }
+
+  protected assign(ex: Exercise, name: string): void {
+    this.busy.set(true);
+    this.api.addAlias(ex.id, name).subscribe({
+      next: (saved) => {
+        this.busy.set(false);
+        this.pickerFor.set(null);
+        this.items.update((list) => list.map((e) => (e.id === saved.id ? saved : e)));
+        this.checkList();
+      },
+      error: (err: unknown) => {
+        this.busy.set(false);
+        this.error.set(apiError(err, 'Nie udało się przypisać nazwy.'));
+      },
+    });
+  }
+
+  protected removeAlias(ex: Exercise, aliasId: number): void {
+    this.api.removeAlias(aliasId).subscribe({
+      next: () =>
+        this.items.update((list) =>
+          list.map((e) => (e.id === ex.id ? { ...e, aliases: e.aliases.filter((a) => a.id !== aliasId) } : e)),
+        ),
     });
   }
 

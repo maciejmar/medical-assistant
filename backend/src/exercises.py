@@ -22,13 +22,32 @@ from typing import Any
 from sqlmodel import col, delete, select
 
 from . import llm
-from .database import KbDocument, KbExercise, KbPrivateDocument, session_factory, utcnow
+from .database import (
+    KbDocument,
+    KbExercise,
+    KbExerciseAlias,
+    KbPrivateDocument,
+    session_factory,
+    utcnow,
+)
 
 logger = logging.getLogger(__name__)
 
-WINDOW_CHARS = 6000
-WINDOW_OVERLAP = 1500
-MATCH_THRESHOLD = 0.86
+# Mniejsze okna = mniej ćwiczeń na wywołanie; przy 6000 zn. model pomijał część krótkich
+# ćwiczeń (luki w numeracji: „karuzela”, „huśtawka 2”, „niania”…).
+WINDOW_CHARS = 3500
+WINDOW_OVERLAP = 1000
+MATCH_THRESHOLD = 0.8
+_ORDINALS = {
+    "pierwsza": "1",
+    "pierwszy": "1",
+    "druga": "2",
+    "drugi": "2",
+    "trzecia": "3",
+    "trzeci": "3",
+    "czwarta": "4",
+    "czwarty": "4",
+}
 
 # Znaczniki katalogu ćwiczeń w tekście (także z typowymi błędami OCR, np. „OTRZEBNE”).
 _MARKERS = re.compile(
@@ -40,8 +59,10 @@ _PAGE = re.compile(r"#\s*Strona\s+(\d+)", re.IGNORECASE)
 EXTRACT_SYSTEM = (
     "Wyodrębniasz katalog ćwiczeń i technik terapeutycznych z fragmentu materiału logopedycznego. "
     "Tekst pochodzi z OCR skanu i może zawierać błędy rozpoznawania (ucięte, zlepione lub "
-    "przekręcone słowa, brakujące litery). Zasady: (1) uwzględnij tylko ćwiczenia/techniki, które "
-    "we fragmencie mają nazwę oraz cel lub opis wykonania; (2) nazwa bez numeru i bez cudzysłowów, "
+    "przekręcone słowa, brakujące litery). Zasady: (1) wypisz WSZYSTKIE ćwiczenia/techniki, które "
+    "we fragmencie mają nazwę oraz cel lub opis wykonania – także bardzo krótkie i kolejne "
+    "o podobnych nazwach (np. „Huśtawka” i „Huśtawka 2” to dwa ćwiczenia); nie pomijaj żadnego "
+    "numeru z kolejnej numeracji; (2) nazwa bez numeru i bez cudzysłowów, "
     "w brzmieniu z tekstu; (3) popraw wyłącznie oczywiste błędy OCR – NIE dodawaj informacji spoza "
     "fragmentu, nie uzupełniaj kroków ani parametrów z własnej wiedzy; (4) opis przepisz wiernie "
     "(możesz go uporządkować w zdania lub punkty); (5) page = numer z najbliższego wcześniejszego "
@@ -54,10 +75,20 @@ EXTRACT_SYSTEM = (
 
 
 def normalize_name(name: str) -> str:
-    """Klucz dopasowania: małe litery, bez diakrytyków, cudzysłowów i interpunkcji."""
+    """Klucz dopasowania: małe litery, bez diakrytyków, cudzysłowów i interpunkcji;
+    liczebniki porządkowe jako cyfry („wersja druga” = „wersja 2”)."""
     text = unicodedata.normalize("NFKD", name.lower().replace("ł", "l"))
     text = "".join(c for c in text if not unicodedata.combining(c))
-    return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
+    return " ".join(_ORDINALS.get(t, t) for t in re.sub(r"[^a-z0-9]+", " ", text).split())
+
+
+def clean_name(name: str) -> str:
+    """Porządkuje nazwę z OCR/modelu: bez cudzysłowów, bez powtórzeń „Pompka. Pompka”."""
+    name = re.sub(r"[„”\"“«»]", "", name).strip(" '.")
+    repeated = re.match(r"^(.{3,}?)\.\s+(.+)$", name)
+    if repeated and repeated.group(2).lower().startswith(repeated.group(1).lower()):
+        name = repeated.group(2)
+    return " ".join(name.split())
 
 
 def marker_count(text: str) -> int:
@@ -101,7 +132,7 @@ def parse_extraction(raw: str) -> list[dict[str, Any]]:
     for item in items if isinstance(items, list) else []:
         if not isinstance(item, dict):
             continue
-        name = str(item.get("name") or "").strip().strip("„”\"'«» ").strip()
+        name = clean_name(str(item.get("name") or ""))
         description = str(item.get("description") or "").strip()
         goal = str(item.get("goal") or "").strip()
         if not name or not normalize_name(name) or not (description or goal):
@@ -183,22 +214,27 @@ async def _extract_document(doc: KbDocument, user_id: int) -> list[dict[str, Any
     return merge_exercises([item for batch in batches for item in batch])
 
 
+async def delete_document_exercises(session, document_ids: list[int]) -> None:
+    """Usuwa ćwiczenia (i ich aliasy) dokumentów – przed usunięciem samych dokumentów."""
+    ids = select(KbExercise.id).where(col(KbExercise.document_id).in_(document_ids))
+    await session.exec(delete(KbExerciseAlias).where(col(KbExerciseAlias.exercise_id).in_(ids)))
+    await session.exec(delete(KbExercise).where(col(KbExercise.document_id).in_(document_ids)))
+
+
 async def save_document_exercises(document_id: int, items: list[dict[str, Any]]) -> int:
-    """Zastępuje niesprawdzone ćwiczenia dokumentu; sprawdzone zostają nietknięte."""
+    """Zastępuje niesprawdzone ćwiczenia dokumentu; sprawdzone i te z aliasami zostają."""
     async with session_factory() as session:
-        verified = (
+        with_alias = select(KbExerciseAlias.exercise_id)
+        protected = (col(KbExercise.verified).is_(True)) | (col(KbExercise.id).in_(with_alias))
+        kept_keys = (
             await session.exec(
-                select(KbExercise.key).where(
-                    KbExercise.document_id == document_id, col(KbExercise.verified).is_(True)
-                )
+                select(KbExercise.key).where(KbExercise.document_id == document_id, protected)
             )
         ).all()
         await session.exec(
-            delete(KbExercise).where(
-                col(KbExercise.document_id) == document_id, col(KbExercise.verified).is_(False)
-            )
+            delete(KbExercise).where(col(KbExercise.document_id) == document_id, ~protected)
         )
-        kept = set(verified)
+        kept = set(kept_keys)
         added = 0
         for item in items:
             key = normalize_name(item["name"])
@@ -280,28 +316,57 @@ def names_from_text(text: str) -> list[str]:
     return names
 
 
-def _candidates(name: str) -> list[str]:
-    """Pełna nazwa, a dla „„glonojad” – zassanie języka…” także sama część przed opisem."""
-    options = [name]
-    quoted = re.match(r"^\s*[„\"“]([^”\"“]+)[”\"“]", name)
-    if quoted:
-        options.append(quoted.group(1))
+SHORT_VARIANT_FACTOR = 0.95
+_DESCRIPTION_WORDS = 4  # dopisek po „ – ” od tylu słów to opis, a nie część nazwy
+
+
+def _candidates(name: str) -> list[tuple[str, float]]:
+    """(wariant nazwy, mnożnik oceny). Pełna nazwa zawsze; sama nazwa bez dopisku tylko wtedy,
+    gdy dopisek wygląda na opis („„glonojad” – zassanie języka jak najdłużej…”). Krótkie
+    dopiski („ćwiczenia oporowe – czubek języka”, „„grot” na boki”) są częścią nazwy – inaczej
+    trafiałyby w ogólne „Ćwiczenia oporowe” / „Grot”."""
+    options = [(name, 1.0)]
+    quoted = re.match(r"^\s*[„\"“]([^”\"“]+)[”\"“](.*)$", name)
+    if quoted and len(normalize_name(quoted.group(2)).split()) >= _DESCRIPTION_WORDS:
+        options.append((quoted.group(1), SHORT_VARIANT_FACTOR))
     for sep in (" – ", " - ", " (", ": "):
-        if sep in name:
-            options.append(name.split(sep, 1)[0])
-    return [o for o in options if normalize_name(o)]
+        head, found, rest = name.partition(sep)
+        if found and len(normalize_name(rest).split()) >= _DESCRIPTION_WORDS:
+            options.append((head, SHORT_VARIANT_FACTOR))
+    return [(o, f) for o, f in options if normalize_name(o)]
+
+
+def _stems(key: str) -> set[str]:
+    # 5 pierwszych liter: „horyzontalnym” = „horyzontalnie”, „oporem” = „oporowe” itp.
+    return {token[:5] for token in key.split()}
+
+
+def name_similarity(a: str, b: str) -> float:
+    """Podobieństwo kluczy: średnia z podobieństwa znaków i wspólnych słów. Obie miary muszą
+    być wysokie, więc nazwa z dodatkowymi słowami („stymulacja punktowa zewnętrzna mięśni
+    żwaczy”) nie trafia w krótszą, inną („stymulacja punktowa zewnętrzna”). Różne numery
+    („huśtawka 2” ≠ „huśtawka”) obniżają ocenę."""
+    if a == b:
+        return 1.0
+    chars = difflib.SequenceMatcher(None, a, b).ratio()
+    sa, sb = _stems(a), _stems(b)
+    words = len(sa & sb) / max(len(sa), len(sb))
+    score = (chars + words) / 2
+    if {t for t in a.split() if t.isdigit()} != {t for t in b.split() if t.isdigit()}:
+        score *= 0.6
+    return score
 
 
 def best_match(name: str, keys: list[str]) -> tuple[str | None, float]:
     best_key, best_score = None, 0.0
-    for option in _candidates(name):
+    for option, factor in _candidates(name):
         key = normalize_name(option)
-        if key in keys:
-            return key, 1.0
-        for close in difflib.get_close_matches(key, keys, n=1, cutoff=MATCH_THRESHOLD):
-            score = difflib.SequenceMatcher(None, key, close).ratio()
+        for candidate in keys:
+            score = name_similarity(key, candidate) * factor
             if score > best_score:
-                best_key, best_score = close, score
+                best_key, best_score = candidate, score
+    if best_score < MATCH_THRESHOLD:
+        return None, 0.0
     return best_key, round(best_score, 3)
 
 
@@ -316,20 +381,59 @@ async def visible_exercises(session, user_id: int | None = None) -> list[KbExerc
     return list((await session.exec(query.order_by(col(KbExercise.id)))).all())
 
 
+async def aliases_by_exercise(session, exercise_ids: list[int]) -> dict[int, list[KbExerciseAlias]]:
+    rows = await session.exec(
+        select(KbExerciseAlias)
+        .where(col(KbExerciseAlias.exercise_id).in_(exercise_ids))
+        .order_by(col(KbExerciseAlias.id))
+    )
+    result: dict[int, list[KbExerciseAlias]] = {}
+    for alias in rows.all():
+        result.setdefault(alias.exercise_id, []).append(alias)
+    return result
+
+
 async def match_names(
     session, names: list[str], user_id: int | None = None
 ) -> list[dict[str, Any]]:
+    """Alias przypisany przez administratora ma pierwszeństwo (ocena 1,0), potem nazwy."""
     exercises = await visible_exercises(session, user_id)
+    by_id = {e.id: e for e in exercises}
     by_key: dict[str, KbExercise] = {}
     for exercise in exercises:  # sprawdzone mają pierwszeństwo przy tej samej nazwie
         if exercise.key not in by_key or (exercise.verified and not by_key[exercise.key].verified):
             by_key[exercise.key] = exercise
+    alias_rows = await aliases_by_exercise(session, list(by_id))  # type: ignore[arg-type]
+    by_alias = {a.key: by_id[a.exercise_id] for rows in alias_rows.values() for a in rows}
     keys = list(by_key)
     results = []
     for name in names:
+        alias_hit = by_alias.get(normalize_name(name))
+        if alias_hit is not None:
+            results.append({"name": name, "exercise": alias_hit, "score": 1.0, "alias": True})
+            continue
         key, score = best_match(name, keys)
-        results.append({"name": name, "exercise": by_key.get(key) if key else None, "score": score})
+        exercise = by_key.get(key) if key else None
+        results.append({"name": name, "exercise": exercise, "score": score, "alias": False})
     return results
+
+
+async def assign_alias(session, exercise: KbExercise, name: str) -> KbExerciseAlias:
+    """Przypisuje nazwę do ćwiczenia (przenosi, jeśli była przypisana gdzie indziej);
+    ćwiczenie staje się sprawdzone – ponowne wyodrębnianie go nie usunie."""
+    key = normalize_name(name)
+    alias = (await session.exec(select(KbExerciseAlias).where(KbExerciseAlias.key == key))).first()
+    if alias is None:
+        alias = KbExerciseAlias(exercise_id=exercise.id, alias=name.strip()[:300], key=key)  # type: ignore[arg-type]
+    else:
+        alias.exercise_id, alias.alias = exercise.id, name.strip()[:300]  # type: ignore[assignment]
+    exercise.verified = True
+    exercise.updated_at = utcnow()
+    session.add(alias)
+    session.add(exercise)
+    await session.commit()
+    await session.refresh(alias)
+    return alias
 
 
 def touch(exercise: KbExercise) -> None:

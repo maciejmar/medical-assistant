@@ -18,6 +18,7 @@ const DESKA: Exercise = {
   complete: true,
   verified: false,
   updated_at: '',
+  aliases: [],
 };
 
 describe('ExercisesComponent', () => {
@@ -48,12 +49,27 @@ describe('ExercisesComponent', () => {
     fixture.detectChanges();
     Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Sprawdź')!.click();
     http.expectOne('/api/admin/exercises/match').flush([
-      { name: 'deska na dźwigu', score: 1, exercise: DESKA },
-      { name: 'kołyska', score: 0, exercise: null },
+      { name: 'deska na dźwigu', score: 1, alias: false, exercise: DESKA },
+      { name: 'kołyska', score: 0, alias: false, exercise: null },
     ]);
     fixture.detectChanges();
     expect(el.textContent).toContain('W katalogu: 1 z 2');
     expect(el.textContent).toContain('kołyska – brak w katalogu');
+
+    // „Przypisz” przy braku: wyszukiwarka z katalogu, wybór zapisuje nazwę jako alias.
+    Array.from(el.querySelectorAll('button')).filter((b) => b.textContent?.trim() === 'Przypisz')[0].click();
+    fixture.detectChanges();
+    const search = el.querySelector('input[aria-label="Szukaj ćwiczenia do przypisania"]') as HTMLInputElement;
+    expect(search.value).toBe('kolyska');
+    search.value = 'dzwig';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes('Deska na dźwigu –'))!.click();
+    const alias = http.expectOne('/api/admin/exercises/1/aliases');
+    expect(alias.request.body).toEqual({ name: 'kołyska' });
+    alias.flush({ ...DESKA, verified: true, aliases: [{ id: 5, alias: 'kołyska' }] });
+    http.expectOne('/api/admin/exercises/match').flush([]);
+    fixture.detectChanges();
 
     const extract = Array.from(el.querySelectorAll('button')).find((b) => b.textContent?.includes('Wyodrębnij ćwiczenia'))!;
     extract.click();

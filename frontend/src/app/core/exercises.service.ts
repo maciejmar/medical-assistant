@@ -12,8 +12,14 @@ export interface ExerciseInput {
   verified: boolean;
 }
 
+export interface ExerciseAlias {
+  id: number;
+  alias: string;
+}
+
 export interface Exercise extends ExerciseInput {
   id: number;
+  aliases: ExerciseAlias[];
   document_id: number;
   document_title: string;
   complete: boolean;
@@ -43,6 +49,8 @@ export interface ExtractionStatus {
 export interface ExerciseMatch {
   name: string;
   score: number;
+  /** Trafienie przez nazwę przypisaną ręcznie (alias). */
+  alias: boolean;
   exercise: Exercise | null;
 }
 
@@ -79,6 +87,15 @@ export class ExercisesService {
 
   remove(id: number): Observable<void> {
     return this.http.delete<void>(`${this.base}/${id}`);
+  }
+
+  /** Przypisuje inną nazwę (np. z promptu lekarza) do ćwiczenia z katalogu. */
+  addAlias(exerciseId: number, name: string): Observable<Exercise> {
+    return this.http.post<Exercise>(`${this.base}/${exerciseId}/aliases`, { name });
+  }
+
+  removeAlias(aliasId: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/aliases/${aliasId}`);
   }
 
   match(text: string): Observable<ExerciseMatch[]> {

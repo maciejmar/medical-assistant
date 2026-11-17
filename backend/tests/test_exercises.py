@@ -19,11 +19,55 @@ def test_normalize_and_match_names():
     keys = ["deska na dzwigu", "grot deska", "glonojad", "cwiczenia oporowe dol"]
     assert exercises.best_match("„glonojad” – zassanie języka jak najdłużej", keys) == (
         "glonojad",
-        1.0,
+        0.95,
     )
     assert exercises.best_match("deska na dzwiqu", keys)[0] == "deska na dzwigu"  # błąd OCR
     assert exercises.best_match("ćwiczenia oporowe – dół", keys) == ("cwiczenia oporowe dol", 1.0)
     assert exercises.best_match("kołyska", keys) == (None, 0.0)
+
+
+def test_match_prefers_full_name_and_rejects_generic_hits():
+    """Przypadki z pierwszego przebiegu na prawdziwym katalogu."""
+    catalog = [
+        "Ćwiczenia oporowe",  # nadgnykowe – nie dla „czubka języka”
+        "Ćwiczenia oporowe - dół",
+        "Dzióbek",
+        "Dzióbek z oporem horyzontalnie",
+        "Huśtawka",
+        "Grot",
+        "Ćwiczenie Shakera",
+        "Ćwiczenie Shakera (wersja pierwsza)",
+        "Ćwiczenie Shakera (wersja druga)",
+        "Stymulacja punktowa (zewnętrzna)",
+        "Rozluznienie podstawy czaszki z rozciągnięciem odcinka szyjnego",
+        "Koparka",
+    ]
+    keys = [exercises.normalize_name(exercises.clean_name(c)) for c in catalog]
+
+    def hit(name: str) -> str | None:
+        key = exercises.best_match(name, keys)[0]
+        return catalog[keys.index(key)] if key else None
+
+    assert hit("„dzióbek” z oporem horyzontalnym") == "Dzióbek z oporem horyzontalnie"
+    assert hit("ćwiczenie Shakera – wersja 2") == "Ćwiczenie Shakera (wersja druga)"
+    assert hit("ćwiczenie Shakera – wersja 1") == "Ćwiczenie Shakera (wersja pierwsza)"
+    assert hit("rozluźnienie podstawy czaszki z delikatnym rozciągnięciem odcinka szyjnego") == (
+        "Rozluznienie podstawy czaszki z rozciągnięciem odcinka szyjnego"
+    )
+    assert hit("„koparka” – ruch wymiatająco-rozcierający w kierunku dolnym") == "Koparka"
+    # Lepiej „brak” niż błędne ćwiczenie:
+    assert hit("ćwiczenia oporowe – czubek języka") is None
+    assert hit("huśtawka 2") is None
+    assert hit("„grot” na boki") is None
+    assert hit("stymulacja punktowa zewnętrzna mięśni żwaczy") is None
+
+
+def test_clean_name_from_ocr():
+    assert exercises.clean_name("Połykanie z cienką s. Połykanie z cienką słomką") == (
+        "Połykanie z cienką słomką"
+    )
+    assert exercises.clean_name("Pionizacja - „winda") == "Pionizacja - winda"
+    assert exercises.clean_name("Pompka. Pompka") == "Pompka"
 
 
 def test_names_from_pasted_list_skip_headings():
@@ -167,10 +211,39 @@ async def test_extraction_review_and_match(client, make_headers, monkeypatch):
         )
     ).json()
     assert matched[0]["exercise"]["description"] == "Opis poprawiony ręcznie."
-    assert matched[1] == {"name": "kołyska", "score": 0.0, "exercise": None}
+    assert matched[1] == {"name": "kołyska", "score": 0.0, "alias": False, "exercise": None}
 
-    other = listing[0]
+    # Nazwa z promptu lekarza przypisana ręcznie do ćwiczenia z katalogu (alias).
+    grot = next(e for e in listing if e["name"] == "Grot - deska")
+    aliased = await client.post(
+        f"/api/admin/exercises/{grot['id']}/aliases",
+        json={"name": "naprzemienny grot"},
+        headers=admin,
+    )
+    assert aliased.status_code == 200, aliased.text
+    assert aliased.json()["verified"] is True
+    assert [a["alias"] for a in aliased.json()["aliases"]] == ["naprzemienny grot"]
+    hit = (
+        await client.post(
+            "/api/admin/exercises/match", json={"text": "• „naprzemienny grot”"}, headers=admin
+        )
+    ).json()[0]
     assert (
-        await client.delete(f"/api/admin/exercises/{other['id']}", headers=admin)
+        hit["alias"] is True and hit["score"] == 1.0 and hit["exercise"]["name"] == "Grot - deska"
+    )
+    # Ćwiczenie z aliasem przetrwa ponowne wyodrębnianie (jest sprawdzone).
+    await client.post(
+        "/api/admin/exercises/extract", json={"document_ids": [doc_id]}, headers=admin
+    )
+    await exercises._task
+    listing = (await client.get("/api/admin/exercises", headers=admin)).json()
+    assert next(e for e in listing if e["name"] == "Grot - deska")["aliases"]
+    alias_id = aliased.json()["aliases"][0]["id"]
+    assert (
+        await client.delete(f"/api/admin/exercises/aliases/{alias_id}", headers=admin)
+    ).status_code == 204
+
+    assert (
+        await client.delete(f"/api/admin/exercises/{grot['id']}", headers=admin)
     ).status_code == 204
     assert len((await client.get("/api/admin/exercises", headers=admin)).json()) == 1

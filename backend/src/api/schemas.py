@@ -631,6 +631,17 @@ class DoctorEventOut(EventOut):
     patient_name: str
 
 
+class ExerciseAliasOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    alias: str
+
+
+class ExerciseAliasIn(BaseModel):
+    name: str = Field(min_length=1, max_length=300)
+
+
 class ExerciseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -646,6 +657,7 @@ class ExerciseOut(BaseModel):
     complete: bool
     verified: bool
     updated_at: datetime
+    aliases: list[ExerciseAliasOut] = []
 
 
 class ExerciseIn(BaseModel):
@@ -689,4 +701,5 @@ class ExerciseMatchIn(BaseModel):
 class ExerciseMatchOut(BaseModel):
     name: str
     score: float
+    alias: bool = False
     exercise: ExerciseOut | None

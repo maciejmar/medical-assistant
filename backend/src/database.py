@@ -478,6 +478,22 @@ class KbExercise(SQLModel, table=True):
     updated_at: datetime = _ts()
 
 
+class KbExerciseAlias(SQLModel, table=True):
+    """Inna nazwa ćwiczenia z katalogu, przypisana ręcznie przez administratora – np. nazwa
+    z promptu lekarza („„guzik” – opór w centrum”) dla ćwiczenia z książki („Guzik – centrum”).
+    Osobna tabela zamiast kolumny w kb_exercises – bez migracji istniejącej tabeli."""
+
+    __tablename__ = "kb_exercise_aliases"
+
+    id: int | None = Field(default=None, primary_key=True)
+    exercise_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("kb_exercises.id"), index=True, nullable=False)
+    )
+    alias: str = Field(max_length=300)
+    key: str = Field(max_length=300, index=True, unique=True)
+    created_at: datetime = _ts()
+
+
 class OcrCacheEntry(SQLModel, table=True):
     """Pamięć podręczna OCR per silnik: (SHA-256 obrazu, klucz silnika z parametrami).
     Pozwala porównywać i przełączać silniki bez utraty wcześniejszych odczytów."""
