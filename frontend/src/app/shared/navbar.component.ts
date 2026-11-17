@@ -17,8 +17,8 @@ import { CreditRingComponent } from './credit-ring.component';
         <a [routerLink]="auth.homeRoute()" class="flex items-center gap-3 text-brand-700" aria-label="Miologopeda – strona główna">
           <img src="assets/images/logopedic-logo-384.png" alt="" width="120" height="120" class="h-[120px] w-[120px] rounded-full bg-white object-cover ring-1 ring-slate-200" />
           <span class="flex flex-col leading-tight">
-            <span class="text-2xl font-bold">Logoped</span>
-            <span class="text-sm font-medium tracking-wide text-brand-600">Assistant</span>
+            <span class="text-2xl font-bold">Miologopeda</span>
+            <span class="text-sm font-medium tracking-wide text-brand-600">AI-Agent</span>
           </span>
         </a>
 
