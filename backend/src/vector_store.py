@@ -169,6 +169,38 @@ class VectorStore:
             {**(p.payload or {}), "id": str(p.id), "fusion_score": p.score} for p in result.points
         ]
 
+    async def single_ranking(
+        self, query: str, dense: list[float], *, using: str, user_id: int | None, limit: int
+    ) -> list[str]:
+        """ID fragmentów w kolejności jednego wyszukiwania (gęste albo rzadkie) – diagnostyka."""
+        result = await self.client.query_points(
+            collection_name=self.collection,
+            query=dense if using == DENSE else sparse_vector(query),
+            using=using,
+            limit=limit,
+            query_filter=search_filter(None, user_id),
+            with_payload=False,
+        )
+        return [str(p.id) for p in result.points]
+
+    async def document_chunks(self, kb_document_id: int) -> list[dict[str, Any]]:
+        """Wszystkie fragmenty jednego dokumentu bazy wiedzy (z payloadem) – diagnostyka."""
+        if not await self.client.collection_exists(self.collection):
+            return []
+        points, _ = await self.client.scroll(
+            collection_name=self.collection,
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="kb_document_id", match=models.MatchValue(value=kb_document_id)
+                    )
+                ]
+            ),
+            limit=500,
+            with_payload=True,
+        )
+        return [{**(p.payload or {}), "id": str(p.id)} for p in points]
+
     async def close(self) -> None:
         await self.client.close()
 
@@ -217,18 +249,26 @@ class Reranker:
         top_n = top_n or settings.rerank_top_n
         if not docs:
             return []
+        if await self._get_model() is None:
+            return [{**d, "score": d.get("fusion_score", 0.0)} for d in docs[:top_n]]
+        return select_relevant(await self.score(query, docs), top_n)
+
+    async def score(self, query: str, docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Ocena trafności (0–1) każdego fragmentu, malejąco – bez odcinania progiem.
+        Bez modelu: kolejność wejściowa z wynikiem fuzji RRF."""
+        if not docs:
+            return []
         model = await self._get_model()
         if model is None:
-            return [{**d, "score": d.get("fusion_score", 0.0)} for d in docs[:top_n]]
-
+            return [{**d, "score": d.get("fusion_score", 0.0)} for d in docs]
         pairs = [(query, f"{d['title']}. {d['text']}") for d in docs]
         raw_scores = await asyncio.to_thread(lambda: model.predict(pairs, show_progress_bar=False))
-        scored = []
-        for doc, raw in zip(docs, raw_scores, strict=True):
-            score = 1.0 / (1.0 + math.exp(-float(raw)))
-            scored.append({**doc, "score": score})
+        scored = [
+            {**doc, "score": 1.0 / (1.0 + math.exp(-float(raw)))}
+            for doc, raw in zip(docs, raw_scores, strict=True)
+        ]
         scored.sort(key=lambda d: d["score"], reverse=True)
-        return select_relevant(scored, top_n)
+        return scored
 
 
 vector_store = VectorStore()

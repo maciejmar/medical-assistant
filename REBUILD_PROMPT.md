@@ -427,6 +427,18 @@ Odczyt/OCR → Embedding → Gotowe, procent ważony liczbą stron (zdjęcia: 85
 szacowany czas do końca (po 3% pracy), bieżący dokument z paskiem „OCR: strona x z y” / „Embedding: fragment x z y”,
 liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzonych dokumentów.
 
+### Sprawdź wyszukiwanie (`src/search_debug.py`, `POST /admin/knowledge/search-test`, `search-test.component.ts`)
+
+Diagnostyka „dlaczego dokumentu nie ma w źródłach”. Sekcja na stronie Bazy wiedzy: pytanie + opcjonalnie dokument.
+Backend odtwarza etapy czatu: przepisanie zapytania (`REWRITE_SYSTEM`, operacja `search_test`), embedding, kandydaci
+dokładnie jak `retrieve` (hybrid bez filtra + wzmocnienie filtrem, `RETRIEVAL_TOP_K`), wybór źródeł jak w czacie
+(`select_relevant`). Dodatkowo: szersza pula 50 (fuzja RRF), osobne miejsca w wyszukiwaniu gęstym i rzadkim
+(`vector_store.single_ranking`), wszystkie fragmenty wskazanego dokumentu (`vector_store.document_chunks`, scroll po
+`kb_document_id`) i ocena rerankera dla każdego (`Reranker.score` – oceny bez odcinania; `rerank` korzysta z niego).
+Wiersz: ocena, miejsca znacz./słowa/razem, etap (źródło / kandydat odrzucony / poza kandydatami). Werdykt dla dokumentu
+(`focus_verdict`): brak fragmentów → „Indeksuj ponownie”; w źródłach; kandydat z niższą oceną; poza kandydatami –
+z informacją, czy reranker przepuściłby go przez próg (wtedy problem leży w wyszukiwaniu, nie w treści).
+
 ### Katalog ćwiczeń (`src/exercises.py`, `api/exercises.py`, `/admin/cwiczenia`)
 
 Po co: fragmenty RAG (~1500 zn.) rozcinają opisy ćwiczeń (nagłówek w jednym fragmencie, opis w następnym), a reranker
@@ -478,7 +490,7 @@ w jednym rekordzie, a szablony z zamkniętą listą ćwiczeń dostaną dokładne
 - `admin`: `GET /admin/usage?days=`, `GET /admin/stats`, `GET|POST /admin/users`, `PATCH|DELETE /admin/users/{id}`,
   `GET /admin/llm-calls`, `GET /admin/llm-calls/{id}`
 - `admin/goldset`: `GET|PUT ""`, `POST /parse`, `PUT|DELETE /{id}`, `GET|POST /runs`, `GET|DELETE /runs/{id}`, `POST /runs/{id}/cancel`
-- `admin/knowledge` (pola formularza i PATCH z `visibility`: `shared`/`private`): `GET|POST ""`, `POST /files`, `GET|POST /import`, `PATCH|DELETE /{id}`, `POST /{id}/reindex`, `POST /reprocess`, `POST /{id}/reprocess`
+- `admin/knowledge` (pola formularza i PATCH z `visibility`: `shared`/`private`): `GET|POST ""`, `POST /files`, `GET|POST /import`, `PATCH|DELETE /{id}`, `POST /{id}/reindex`, `POST /reprocess`, `POST /{id}/reprocess`, `POST /search-test`
 - `GET /api/health`
 
 ## 12. Frontend – struktura
@@ -547,6 +559,9 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-17** – „Sprawdź wyszukiwanie” w Bazie wiedzy (`search_debug.py`, `POST /admin/knowledge/search-test`):
+  nowy dokument (wędzidełka) był zaindeksowany i wspólny, a nie pojawiał się w źródłach – narzędzie pokazuje etap,
+  na którym fragment odpada (kandydaci, ocena rerankera, miejsca w wyszukiwaniu gęstym/po słowach).
 - **2026-11-17** – Favicon z logo Webaby (sam znak na białym tle, `favicon.ico` + `apple-touch-icon.png`); wcześniej aplikacja
   nie miała ikony karty.
 - **2026-11-17** – Szablony promptów (pastylki w czacie): 4 etapy terapii miofunkcjonalnej jako szablony wspólne,

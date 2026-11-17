@@ -32,6 +32,7 @@ from ..knowledge import (
     set_document_owner,
 )
 from ..ocr import ENGINES, OcrUnavailableError, get_engine
+from ..search_debug import diagnose
 from ..seed_data import DOCUMENTS
 from ..vector_store import vector_store
 from .schemas import (
@@ -41,6 +42,8 @@ from .schemas import (
     KbImportStatusOut,
     KbOcrEngineOut,
     KbReprocessIn,
+    KbSearchTestIn,
+    KbSearchTestOut,
     KbStoredFileOut,
     KnowledgeBaseOut,
 )
@@ -246,6 +249,21 @@ def _engine_label(name: str | None) -> str:
         return get_engine(name).label
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+
+@router.post("/search-test", response_model=KbSearchTestOut)
+async def search_test(body: KbSearchTestIn, session: SessionDep, admin: CurrentAdmin) -> dict:
+    """Diagnostyka: etapy wyszukiwania czatu dla pytania (kandydaci, oceny rerankera, źródła)."""
+    title = ""
+    if body.document_id is not None:
+        doc, _ = await _get(session, body.document_id, admin)
+        title = doc.title
+    try:
+        return await diagnose(body.question, admin.id, body.document_id, title)  # type: ignore[arg-type]
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, f"Wyszukiwanie nie powiodło się: {exc}"
+        ) from exc
 
 
 @router.post("/reprocess", response_model=KbImportStatusOut, status_code=status.HTTP_202_ACCEPTED)

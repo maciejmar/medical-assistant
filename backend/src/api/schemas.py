@@ -320,6 +320,43 @@ class KbOcrEngineOut(BaseModel):
     label: str
 
 
+class KbSearchTestIn(BaseModel):
+    question: str = Field(min_length=3, max_length=2000)
+    document_id: int | None = None
+
+
+class KbSearchRowOut(BaseModel):
+    id: str
+    title: str
+    document_id: int | None
+    snippet: str
+    score: float
+    dense_rank: int | None
+    sparse_rank: int | None
+    fusion_rank: int | None
+    candidate: bool
+    selected: bool
+
+
+class KbSearchFocusOut(BaseModel):
+    document_id: int
+    title: str
+    chunks: int
+    best_score: float | None
+    verdict: str
+
+
+class KbSearchTestOut(BaseModel):
+    question: str
+    rewritten_query: str
+    filters: dict[str, str]
+    top_k: int
+    top_n: int
+    min_score: float
+    rows: list[KbSearchRowOut]
+    focus: KbSearchFocusOut | None
+
+
 class KbReprocessIn(BaseModel):
     engine: str | None = Field(default=None, max_length=50)
     force_ocr: bool = True

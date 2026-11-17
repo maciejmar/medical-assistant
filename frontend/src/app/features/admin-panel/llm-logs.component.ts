@@ -12,6 +12,7 @@ const OPERATIONS = [
   { value: 'chat_template', label: 'Odpowiedź z szablonu (chat_template)' },
   { value: 'exercise_extraction', label: 'Wyodrębnianie ćwiczeń' },
   { value: 'query_rewriting', label: 'Przepisanie zapytania' },
+  { value: 'search_test', label: 'Sprawdź wyszukiwanie (panel)' },
   { value: 'embedding_query', label: 'Embedding zapytania' },
   { value: 'seed_embedding', label: 'Embedding bazy wiedzy' },
 ];

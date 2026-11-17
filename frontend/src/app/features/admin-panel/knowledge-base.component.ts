@@ -14,6 +14,7 @@ import {
   KbVisibility,
 } from '../../shared/models';
 import { ImportProgressComponent, UploadState } from './import-progress.component';
+import { SearchTestComponent } from './search-test.component';
 
 const ACCEPT = '.pdf,.docx,.odt,.md,.txt,.jpg,.jpeg,.png';
 const POLL_MS = 2000;
@@ -56,7 +57,7 @@ function apiError(err: unknown, fallback: string): string {
 @Component({
   selector: 'app-knowledge-base',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, DatePipe, DecimalPipe, ImportProgressComponent],
+  imports: [ReactiveFormsModule, RouterLink, DatePipe, DecimalPipe, ImportProgressComponent, SearchTestComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mb-6">
@@ -230,6 +231,8 @@ function apiError(err: unknown, fallback: string): string {
         Z obrazów odczytywany jest tylko druk. Nie wgrywaj materiałów z danymi pacjentów.
       </p>
     </form>
+
+    <app-search-test [documents]="documents()" />
 
     <section class="card">
       <div class="mb-3 flex items-center justify-between gap-2">
