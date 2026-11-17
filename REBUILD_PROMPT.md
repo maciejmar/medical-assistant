@@ -79,6 +79,9 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `llm_calls` | user_id, operation, model_name, request (JSON – wiadomości **po anonimizacji**), response, status, error, tokeny, duration_ms |
 | `kb_documents` | title, filename, category, audience, icd10, icd11, tags, text (pełny odczytany tekst), chunks, status (`pending`/`indexed`/`error`), error, uploaded_by, source_path (import z katalogu), content_hash, pages, created_at, indexed_at |
 | `kb_private_documents` | document_id (PK → kb_documents), owner_id (→ users) – dokument prywatny; brak wpisu = wiedza wspólna |
+| `prompt_templates` | id, owner_id (NULL = wspólny; bez FK, usuwane z kontem), name (etykieta pastylki), description, body, requires_patient, long_answer, position, active, seed_key (szablony startowe), created_at, updated_at |
+| `chat_message_templates` | message_id (PK, id wiadomości w chat_history; bez FK), template_id, template_name – etykieta szablonu przy pytaniu |
+| `kb_exercise_aliases` | id, exercise_id (→ kb_exercises), alias, key (unikalny, znormalizowany), created_at – inna nazwa ćwiczenia przypisana ręcznie przez admina |
 | `kb_exercises` | katalog ćwiczeń: document_id (→ kb_documents), number, name, key (nazwa znormalizowana), goal, tools, description, page, complete, verified, created_at, updated_at; usuwane razem z dokumentem |
 | `kb_ocr_results` | (sha256 obrazu, engine = klucz silnika z parametrami) PK, text, confidence – pamięć podręczna OCR per silnik |
 | `kb_ocr_pages` | sha256, text, confidence – pierwotna pamięć OCR Tesseracta (tylko odczyt; traktowana jak wyniki klucza `tesseract:pol+eng:c60`) |
@@ -112,6 +115,29 @@ Graf: `rewrite_query → retrieve → rerank → generate | generate_without_con
    wykorzystaj wszystkie cechy pacjenta, znaczniki anonimizacji traktuj jak zwykłe odniesienia.
    Kontekst pacjenta: wiek (u dzieci „6 lat 3 mies. (6;3)”), płeć (z imienia), ICD, rozpoznanie, **pełny opis**.
 5. **report_usage** – suma tokenów ze wszystkich węzłów (reducer `merge_usage`).
+
+**Szablony (pastylki, `src/templates.py`, `api/templates.py`):** `ChatIn.template_id` → szablon widoczny dla
+użytkownika (wspólny lub własny, aktywny), `requires_patient` bez pacjenta → 422 „Ten szablon wymaga wybrania
+pacjenta…”. Ćwiczenia szablonu = wiersze z punktorem (`template_exercise_names`), dopasowane do katalogu ćwiczeń
+(`match_names`, z aliasami) → `template_documents` (tytuł „Ćwiczenie: Nazwa (Dokument, s. N)”, tekst: cel/narzędzia/
+opis; warianty jednego ćwiczenia raz) i `template_missing`. `rerank` dokłada je PRZED fragmentami RAG (cytowane
+[n] jak fragmenty, widoczne w Źródłach). `build_answer_messages`: `TEMPLATE_RULES` w prompcie systemowym (dobór
+wyłącznie z bazy szablonu, uzasadnienie danymi pacjenta, liczby = maksimum, „Do uzupełnienia w badaniu”,
+dostosowanie do wieku, sposób wykonania tylko ze źródeł „Ćwiczenie:” albo „wg materiałów szkoleniowych”, format
+Spotkanie 1/2 ma pierwszeństwo), treść szablonu i lista ćwiczeń bez opisu w wiadomości. `long_answer` →
+`TEMPLATE_ANSWER_MODEL` (domyślnie gpt-4.1-mini; po wyczerpaniu kredytów i tak model lokalny) i
+`TEMPLATE_MAX_TOKENS=4500`, operacja `chat_template`. Etykieta szablonu zapisywana przy pytaniu
+(`chat_message_templates`) i zwracana w historii (`template_name`). Szablony startowe (`SEED_TEMPLATES`, seed_key
+`mft-stage-1..4`: Etap 1 · Napięcie, Etap 2 · Wydolność, Etap 3 · Siła, Etap 4 · Funkcja; „do 7 / do 6” ćwiczeń)
+wpisywane przy starcie (`seed_templates`, bez nadpisywania); usunięcie startowego tylko go ukrywa (`active=false`).
+API `/api/templates`: GET (wspólne + własne, `shared`/`editable`), POST (własny; `shared` tylko admin), PUT/DELETE
+(własne; wspólne – admin), `POST /{id}/copy` („… (moja)”), `POST /coverage` (które ćwiczenia mają opis w katalogu).
+**UI czatu:** nad polem pytania pastylki szablonów (jedna naraz, `aria-pressed`) z przyciskiem 👁 (podgląd treści),
+link „Moje szablony”; wybrany szablon bez pacjenta → komunikat, czerwona ramka pola pacjenta, „Wyślij” zablokowany;
+pole tekstowe = opcjonalne uwagi („Przygotuj plan: <nazwa>
+Uwagi lekarza: …”); pastylka działa na jedno pytanie;
+etykieta „Szablon: …” w dymku pytania. **Strona `/szablony`:** własne (edycja, usuwanie) i wspólne (podgląd,
+„Kopiuj do moich”, admin: edycja/ukrycie), edytor z „Sprawdź ćwiczenia w bazie wiedzy” (✓/✗ z katalogu).
 
 API `POST /api/chat` zwraca **SSE**: `meta`, `status`, `sources`, `token`, `usage`, `error`, `done`;
 wiadomości zapisywane w `chat_history`. Frontend czyta strumień przez `fetch` + `ReadableStream`
@@ -406,15 +432,21 @@ w jednym rekordzie, a szablony z zamkniętą listą ćwiczeń dostaną dokładne
 - **Kandydaci:** dokumenty ze znacznikami katalogu (`CEL:`, `OPIS TECHNIKI`, `(P)OTRZEBNE NARZ…`, `SPOSÓB WYKONANIA`);
   domyślnie zaznaczone te z ≥ 5 znacznikami i bez wyodrębnionych ćwiczeń.
 - **Wyodrębnianie (w tle, jedno naraz, koszt w kredytach admina, operacja `exercise_extraction`):** tekst dokumentu
-  w oknach 6000 zn. z zakładką 1500 zn. (cięcie na końcu wiersza), okna bez znaczników pomijane, 4 okna równolegle;
+  w oknach 3500 zn. z zakładką 1000 zn. (przy 6000 model pomijał krótkie ćwiczenia – luki w numeracji) (cięcie na końcu wiersza), okna bez znaczników pomijane, 4 okna równolegle;
   model zwraca JSON `{exercises: [{number, name, page, goal, tools, description, complete}]}` – poprawia tylko oczywiste
   błędy OCR, bez dopisywania treści; strona z najbliższego znacznika „# Strona N”. Duplikaty z zakładek scalane
   (pełny opis > ucięty > dłuższy). Ponowne wyodrębnienie zastępuje niesprawdzone ćwiczenia dokumentu, sprawdzone
   (`verified`, ustawiane przy edycji lub przyciskiem „Sprawdzone”) zostają.
-- **Dopasowanie nazw** (`match_names`): klucz = małe litery bez diakrytyków/cudzysłowów/interpunkcji; dokładne albo
-  `difflib` ≥ 0,86 (błędy OCR); warianty nazwy: pełna, część w cudzysłowie, część przed „ – ”/„ (”/„: ”. Widoczność jak
+- **Dopasowanie nazw** (`match_names`): najpierw alias (ocena 1,0), potem nazwy. Klucz = małe litery bez diakrytyków/
+  cudzysłowów/interpunkcji, liczebniki porządkowe jako cyfry („wersja druga” = „wersja 2”). Ocena = średnia z podobieństwa
+  znaków (`difflib`) i wspólnych słów (5-literowe rdzenie), × 0,6 przy różnych numerach; próg 0,8. Wariant bez dopisku
+  (część w cudzysłowie / przed „ – ”) tylko gdy dopisek ma ≥ 4 słowa (opis), z mnożnikiem 0,95 – krótkie dopiski są
+  częścią nazwy (inaczej „ćwiczenia oporowe – czubek języka” trafiało w ogólne „Ćwiczenia oporowe”). Lepiej ✗ niż błędne. Widoczność jak
   dokumentu (wspólne + prywatne danego użytkownika). `POST /admin/exercises/match` przyjmuje wklejoną listę
   (punktory/numeracja/przecinki pomijane, nagłówki WIELKIMI LITERAMI i wiersze z „:” na końcu też).
+- **Aliasy:** przy wyniku sprawdzania listy „Przypisz”/„Zmień” → wyszukiwarka ćwiczeń z katalogu → nazwa z listy
+  zapisywana jako alias (ćwiczenie staje się sprawdzone, więc ponowne wyodrębnienie go nie usunie); aliasy widoczne
+  w katalogu jako „Inne nazwy” (usuwanie ×). Nazwy porządkowane `clean_name` (bez cudzysłowów, „Pompka. Pompka” → „Pompka”).
 - **UI:** lista kandydatów z checkboxami i paskiem postępu, „Sprawdź listę ćwiczeń” (✓ z opisem / ✗ brak w katalogu),
   katalog z wyszukiwaniem bez diakrytyków, filtrem „tylko niesprawdzone”, edycją i usuwaniem. Link z nagłówka Bazy wiedzy.
 
@@ -467,7 +499,7 @@ jako 600); tło `body` – gradient `#c8e4dd → #1f052e`; karty dashboardu/asys
 `VLLM_BASE_URL`, `VLLM_API_KEY`, `VLLM_CHAT_MODEL` (np. Qwen/Qwen2.5-7B-Instruct), `VLLM_EMBEDDING_MODEL`
 (np. BAAI/bge-m3), `WHISPER_API_URL`, `WHISPER_API_KEY`, `WHISPER_MODEL`, `POSTGRES_USER/PASSWORD/DB` (DB_URL
 budowany w compose), `JWT_SECRET` (≥ 32 zn.), `ACCESS_TOKEN_EXPIRE_MINUTES`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`,
-`CORS_ORIGINS`, `RERANKER_MODEL`, `RETRIEVAL_TOP_K`, `RERANK_TOP_N`, `RERANK_MIN_SCORE`, `RERANK_FALLBACK_N`, `BILLING_CREDITS_PER_PLN`,
+`CORS_ORIGINS`, `RERANKER_MODEL`, `RETRIEVAL_TOP_K`, `RERANK_TOP_N`, `RERANK_MIN_SCORE`, `RERANK_FALLBACK_N`, `BILLING_CREDITS_PER_PLN`, `TEMPLATE_ANSWER_MODEL`, `TEMPLATE_MAX_TOKENS`,
 `LLM_LOG_ENABLED`, `LLM_LOG_RETENTION_DAYS`, `SMTP_HOST/PORT/USER/PASSWORD/FROM/STARTTLS/SSL`, `APP_PUBLIC_URL`,
 `KB_SOURCE_HOST_DIR`, `KB_SCAN_INTERVAL_SECONDS`, `KB_SESSION_GAP_MINUTES`, `OCR_*`, `SEED_ON_STARTUP`.
 Wzorce: `.env.example` (dev) i `deploy/logoped-assist.env.example` (serwer: `/opt/logoped-assist.env`, chmod 600).
@@ -512,6 +544,14 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-17** – Szablony promptów (pastylki w czacie): 4 etapy terapii miofunkcjonalnej jako szablony wspólne,
+  własne szablony lekarzy (`/szablony`, kopiowanie wspólnych), podgląd 👁, obowiązkowy pacjent, opisy ćwiczeń
+  z katalogu jako źródła, mocniejszy model i dłuższa odpowiedź, etykieta szablonu w historii rozmowy.
+- **2026-11-17** – Zasady rozumowania klinicznego w `ANSWER_SYSTEM` ograniczone do zaburzeń miofunkcjonalnych/
+  orofacjalnych – przy afazji, dyzartrii, jąkaniu itp. asystent wprowadzał schemat oddychanie → język → połykanie.
+- **2026-11-17** – Katalog ćwiczeń, poprawki po pierwszym przebiegu (98/129 dopasowanych): ostrzejsze dopasowanie nazw
+  (bez błędnych trafień w ogólne ćwiczenia, numery wersji), aliasy nazw przypisywane ręcznie, mniejsze okna
+  wyodrębniania (mniej pominiętych ćwiczeń), czyszczenie nazw z OCR.
 - **2026-11-17** – Katalog ćwiczeń (`kb_exercises`, `/admin/cwiczenia`): jednorazowe wyodrębnienie ćwiczeń z dokumentów
   bazy wiedzy przez LLM (okna z zakładką, scalanie duplikatów, poprawa OCR bez dopisywania treści), przegląd i edycja
   administratora, sprawdzanie listy nazw względem katalogu. Przygotowanie pod szablony promptów z zamkniętą listą

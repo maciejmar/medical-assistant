@@ -15,6 +15,7 @@ from sqlmodel import col, delete, select
 from ..auth import CurrentAdmin, SessionDep, hash_password
 from ..database import (
     ChatMessage,
+    ChatMessageTemplate,
     CreditTopUp,
     KbDocument,
     KbPrivateDocument,
@@ -22,6 +23,7 @@ from ..database import (
     Patient,
     PatientAccount,
     PaymentSession,
+    PromptTemplate,
     Role,
     TokenUsage,
     User,
@@ -214,7 +216,15 @@ async def delete_user(user_id: int, session: SessionDep, admin: CurrentAdmin) ->
     patient_ids = (await session.exec(select(Patient.id).where(Patient.user_id == user.id))).all()
     await purge_patients(session, [pid for pid in patient_ids if pid is not None])
     await session.exec(delete(PatientAccount).where(col(PatientAccount.user_id) == user.id))
+    await session.exec(
+        delete(ChatMessageTemplate).where(
+            col(ChatMessageTemplate.message_id).in_(
+                select(ChatMessage.id).where(ChatMessage.user_id == user.id)
+            )
+        )
+    )
     await session.exec(delete(ChatMessage).where(col(ChatMessage.user_id) == user.id))
+    await session.exec(delete(PromptTemplate).where(col(PromptTemplate.owner_id) == user.id))
     await session.exec(delete(PaymentSession).where(col(PaymentSession.user_id) == user.id))
     await session.exec(delete(CreditTopUp).where(col(CreditTopUp.user_id) == user.id))
     await session.exec(delete(UserSubscription).where(col(UserSubscription.user_id) == user.id))

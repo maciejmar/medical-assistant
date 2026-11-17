@@ -12,10 +12,11 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlmodel import col, delete, select
 
+from .. import templates
 from ..anonymizer import is_female_name
 from ..auth import CurrentDoctor, SessionDep
 from ..config import settings
-from ..database import ChatMessage, Patient, User, session_factory
+from ..database import ChatMessage, ChatMessageTemplate, Patient, User, session_factory
 from ..graph import rag_graph
 from .interview import approved_interview
 from .plan import plan_for_context
@@ -91,10 +92,29 @@ async def _owned_conversation_messages(
     return list(rows.all())
 
 
-async def _save_message(**fields: Any) -> None:
+async def _save_message(template: dict[str, Any] | None = None, **fields: Any) -> None:
     async with session_factory() as session:
-        session.add(ChatMessage(**fields))
+        message = ChatMessage(**fields)
+        session.add(message)
+        await session.flush()
+        if template:
+            session.add(
+                ChatMessageTemplate(
+                    message_id=message.id,  # type: ignore[arg-type]
+                    template_id=template["id"],
+                    template_name=template["name"],
+                )
+            )
         await session.commit()
+
+
+async def _template_names(session: SessionDep, message_ids: list[int]) -> dict[int, str]:
+    if not message_ids:
+        return {}
+    rows = await session.exec(
+        select(ChatMessageTemplate).where(col(ChatMessageTemplate.message_id).in_(message_ids))
+    )
+    return {row.message_id: row.template_name for row in rows.all()}
 
 
 @router.post("")
@@ -112,6 +132,27 @@ async def chat(body: ChatIn, session: SessionDep, doctor: CurrentDoctor) -> Stre
         plan = await plan_for_context(session, patient.id)  # type: ignore[arg-type]
         patient_context = describe_patient(patient, interview, plan) or None
 
+    template: dict[str, Any] | None = None
+    template_documents: list[dict[str, Any]] = []
+    template_missing: list[str] = []
+    if body.template_id is not None:
+        chosen = await templates.template_for_user(session, body.template_id, doctor.id)  # type: ignore[arg-type]
+        if chosen is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie znaleziono szablonu")
+        if chosen.requires_patient and body.patient_id is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, templates.NO_PATIENT_MESSAGE)
+        template = {
+            "id": chosen.id,
+            "name": chosen.name,
+            "body": chosen.body,
+            "long_answer": chosen.long_answer,
+        }
+        template_documents, template_missing = await templates.catalog_documents(
+            session,
+            chosen,
+            doctor.id,  # type: ignore[arg-type]
+        )
+
     conversation_id = body.conversation_id or str(uuid.uuid4())
     previous = await _owned_conversation_messages(session, doctor, conversation_id)
     if body.conversation_id and not previous:
@@ -125,6 +166,7 @@ async def chat(body: ChatIn, session: SessionDep, doctor: CurrentDoctor) -> Stre
         patient_id=body.patient_id,
         role="user",
         content=body.message,
+        template=template,
     )
 
     initial_state = {
@@ -132,6 +174,9 @@ async def chat(body: ChatIn, session: SessionDep, doctor: CurrentDoctor) -> Stre
         "question": body.message,
         "history": history,
         "patient_context": patient_context,
+        "template": template,
+        "template_documents": template_documents,
+        "template_missing": template_missing,
     }
 
     async def event_stream() -> AsyncIterator[str]:
@@ -219,17 +264,29 @@ async def list_conversations(
 @router.get("/conversations/{conversation_id}", response_model=list[ChatMessageOut])
 async def get_conversation(
     conversation_id: str, session: SessionDep, doctor: CurrentDoctor
-) -> list[ChatMessage]:
+) -> list[ChatMessageOut]:
     messages = await _owned_conversation_messages(session, doctor, conversation_id)
     if not messages:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie znaleziono rozmowy")
-    return messages
+    names = await _template_names(session, [m.id for m in messages])  # type: ignore[misc]
+    result = []
+    for message in messages:
+        out = ChatMessageOut.model_validate(message)
+        out.template_name = names.get(message.id)  # type: ignore[arg-type]
+        result.append(out)
+    return result
 
 
 @router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_conversation(
     conversation_id: str, session: SessionDep, doctor: CurrentDoctor
 ) -> Response:
+    ids = select(ChatMessage.id).where(
+        ChatMessage.conversation_id == conversation_id, ChatMessage.user_id == doctor.id
+    )
+    await session.exec(
+        delete(ChatMessageTemplate).where(col(ChatMessageTemplate.message_id).in_(ids))
+    )
     await session.exec(
         delete(ChatMessage).where(
             col(ChatMessage.conversation_id) == conversation_id,

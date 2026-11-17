@@ -494,6 +494,40 @@ class KbExerciseAlias(SQLModel, table=True):
     created_at: datetime = _ts()
 
 
+class PromptTemplate(SQLModel, table=True):
+    """Szablon promptu (pastylka w czacie), np. „Etap 2 · Wydolność”.
+
+    owner_id = None – szablon wspólny (widzą wszyscy, edytuje administrator); inaczej prywatny
+    szablon lekarza. seed_key – szablony startowe wpisywane przy pierwszym uruchomieniu (bez
+    nadpisywania późniejszych zmian). Bez klucza obcego do users – usuwane jawnie z kontem."""
+
+    __tablename__ = "prompt_templates"
+
+    id: int | None = Field(default=None, primary_key=True)
+    owner_id: int | None = Field(default=None, index=True)
+    name: str = Field(max_length=80)
+    description: str = Field(default="", max_length=300)
+    body: str = Field(sa_column=Column(Text, nullable=False))
+    requires_patient: bool = Field(default=True)
+    long_answer: bool = Field(default=True)
+    position: int = Field(default=0)
+    active: bool = Field(default=True)
+    seed_key: str | None = Field(default=None, max_length=50, index=True)
+    created_at: datetime = _ts()
+    updated_at: datetime = _ts()
+
+
+class ChatMessageTemplate(SQLModel, table=True):
+    """Szablon użyty przy pytaniu w czacie (etykieta w historii rozmowy).
+    Osobna tabela zamiast kolumny w chat_history – bez migracji istniejącej tabeli."""
+
+    __tablename__ = "chat_message_templates"
+
+    message_id: int = Field(primary_key=True)
+    template_id: int | None = Field(default=None)
+    template_name: str = Field(max_length=80)
+
+
 class OcrCacheEntry(SQLModel, table=True):
     """Pamięć podręczna OCR per silnik: (SHA-256 obrazu, klucz silnika z parametrami).
     Pozwala porównywać i przełączać silniki bez utraty wcześniejszych odczytów."""

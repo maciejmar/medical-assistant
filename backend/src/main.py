@@ -15,6 +15,7 @@ from .kb_import import job as import_job
 from .kb_import import watch_directory
 from .llm import drain_background_tasks, purge_old_llm_calls
 from .seed import seed_with_retries
+from .templates import seed_templates
 from .vector_store import reranker, vector_store
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -48,6 +49,7 @@ async def ensure_admin() -> None:
 async def lifespan(_: FastAPI):
     await init_db()
     await ensure_admin()
+    await seed_templates()
     await purge_old_llm_calls()
     background: list[asyncio.Task] = [asyncio.create_task(reranker.warmup())]
     if settings.seed_on_startup:

@@ -39,6 +39,11 @@ export const routes: Routes = [
       import('./features/calendar/doctor-calendar.component').then((m) => m.DoctorCalendarComponent),
   },
   {
+    path: 'szablony',
+    canActivate: [doctorGuard],
+    loadComponent: () => import('./features/templates/templates.component').then((m) => m.TemplatesComponent),
+  },
+  {
     path: 'kredyty',
     canActivate: [doctorGuard],
     loadComponent: () => import('./features/credits/credits.component').then((m) => m.CreditsComponent),

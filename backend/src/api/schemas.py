@@ -79,6 +79,8 @@ class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     conversation_id: str | None = Field(default=None, max_length=36)
     patient_id: int | None = None
+    # Szablon promptu (pastylka) – plan wg szablonu, z opisami ćwiczeń z katalogu.
+    template_id: int | None = None
 
 
 class ChatMessageOut(BaseModel):
@@ -90,6 +92,7 @@ class ChatMessageOut(BaseModel):
     sources: list | None
     total_tokens: int
     created_at: datetime
+    template_name: str | None = None
 
 
 class PatientChatMessageOut(ChatMessageOut):
@@ -703,3 +706,38 @@ class ExerciseMatchOut(BaseModel):
     score: float
     alias: bool = False
     exercise: ExerciseOut | None
+
+
+class TemplateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    description: str = Field(default="", max_length=300)
+    body: str = Field(min_length=1, max_length=30000)
+    requires_patient: bool = True
+    long_answer: bool = True
+    position: int = Field(default=0, ge=0, le=1000)
+    # Tylko administrator: szablon wspólny dla wszystkich lekarzy.
+    shared: bool = False
+
+
+class TemplateOut(BaseModel):
+    id: int
+    name: str
+    description: str
+    body: str
+    requires_patient: bool
+    long_answer: bool
+    position: int
+    shared: bool
+    editable: bool
+    updated_at: datetime
+
+
+class TemplateCoverageIn(BaseModel):
+    body: str = Field(min_length=1, max_length=30000)
+
+
+class TemplateCoverageOut(BaseModel):
+    name: str
+    found: bool
+    exercise_name: str = ""
+    source: str = ""

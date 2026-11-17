@@ -13,6 +13,7 @@ from langgraph.config import get_stream_writer
 
 from .. import llm
 from ..config import settings
+from ..templates import TEMPLATE_RULES
 from ..vector_store import ALLOWED_AUDIENCES, ALLOWED_CATEGORIES, reranker, vector_store
 from .state import ChatState, merge_usage
 
@@ -45,8 +46,12 @@ ANSWER_SYSTEM = (
     "zwykłe odniesienia (płeć wynika ze znacznika imienia); nie komentuj anonimizacji, nie proś "
     "o te dane i nie powtarzaj znaczników bez potrzeby.\n\n"
     "Gdy pytanie dotyczy planu terapii, kolejności postępowania lub od czego zacząć, ułóż "
-    "odpowiedź jako numerowane kroki w porządku „najpierw → potem → na końcu”, kierując się "
-    "zasadami rozumowania klinicznego w terapii logopedycznej i miofunkcjonalnej:\n"
+    "odpowiedź jako numerowane kroki w porządku „najpierw → potem → na końcu”, dobrane do "
+    "rozpoznania pacjenta. Poniższe zasady stosuj TYLKO przy zaburzeniach miofunkcjonalnych "
+    "i funkcji orofacjalnych (oddychanie, pozycja spoczynkowa języka, połykanie, żucie, wady "
+    "zgryzu, wędzidełko, artykulacja zależna od tych funkcji). Przy innych zaburzeniach (np. "
+    "afazja, dyzartria, jąkanie, opóźniony rozwój mowy, zaburzenia słuchu) nie wprowadzaj "
+    "schematu miofunkcjonalnego – planuj według specyfiki danego zaburzenia i źródeł:\n"
     "1. Najpierw diagnoza przyczyny, zanim zaczniesz ćwiczenia: oceń oddychanie (tor, drożność "
     "nosa, czy oddychanie ustami utrzymuje się poza infekcją, we śnie, przy wysiłku), szkodliwe "
     "nawyki (smoczek, ssanie palca, picie z butelki), napięcie i funkcję mięśni, ruchomość "
@@ -214,6 +219,8 @@ async def retrieve(state: ChatState) -> dict[str, Any]:
 async def rerank(state: ChatState) -> dict[str, Any]:
     _stage("rerank")
     docs = await reranker.rerank(state["rewritten_query"], state.get("candidates", []))
+    # Tryb szablonu: pełne opisy ćwiczeń z katalogu jako pierwsze źródła (cytowane jak fragmenty).
+    docs = list(state.get("template_documents") or []) + docs
     get_stream_writer()(
         {
             "type": "sources",
@@ -251,9 +258,19 @@ def build_answer_messages(state: ChatState, grounded: bool) -> list[dict[str, st
     else:
         system += " " + NO_CONTEXT_NOTE
 
+    template = state.get("template")
+    if template:
+        system += "\n\n" + TEMPLATE_RULES
     if state.get("patient_context"):
         system += "\n\n" + PATIENT_RULES
         parts.append("Kontekst pacjenta (zanonimizowany):\n" + state["patient_context"])
+    if template:
+        parts.append(f"Szablon „{template['name']}”:\n{template['body']}")
+        if state.get("template_missing"):
+            parts.append(
+                "Ćwiczenia z bazy szablonu bez opisu w bazie wiedzy (sposób wykonania – wg "
+                "materiałów szkoleniowych): " + "; ".join(state["template_missing"])
+            )
     parts.append("Pytanie lekarza: " + state["question"])
 
     messages = [{"role": "system", "content": system}]
@@ -267,8 +284,18 @@ async def _stream_answer(state: ChatState, grounded: bool) -> dict[str, Any]:
     writer = get_stream_writer()
     pieces: list[str] = []
     usage = llm.Usage()
+    template = state.get("template") or {}
+    options: dict[str, Any] = {}
+    if template.get("long_answer"):
+        options = {
+            "model": settings.template_answer_model or None,
+            "max_tokens": settings.template_max_tokens,
+        }
     async for item in llm.chat_stream(
-        build_answer_messages(state, grounded), user_id=state["user_id"], operation="chat_rag"
+        build_answer_messages(state, grounded),
+        user_id=state["user_id"],
+        operation="chat_template" if template else "chat_rag",
+        **options,
     ):
         if isinstance(item, llm.Usage):
             usage = item

@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     reranker_model: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
     retrieval_top_k: int = 12
     rerank_top_n: int = 6
+    # Szablony z długą odpowiedzią (plany etapów terapii): mocniejszy model i wyższy limit.
+    # Pusty model = model podstawowy (VLLM_CHAT_MODEL).
+    template_answer_model: str = "gpt-4.1-mini"
+    template_max_tokens: int = 4500
     rerank_min_score: float = 0.02
     rerank_fallback_n: int = 2
     kb_max_upload_bytes: int = 20 * 1024 * 1024

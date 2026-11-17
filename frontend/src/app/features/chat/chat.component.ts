@@ -4,6 +4,7 @@ import {
   Component,
   ElementRef,
   OnDestroy,
+  computed,
   effect,
   inject,
   signal,
@@ -15,6 +16,7 @@ import { BillingService, EXHAUSTED_MESSAGE } from '../../core/billing.service';
 import { ChatService } from '../../core/chat.service';
 import { MarkdownPipe } from '../../shared/markdown.pipe';
 import { PatientsService } from '../../core/patients.service';
+import { PromptTemplate, TemplatesService } from '../../core/templates.service';
 import {
   ChatEvent,
   ChatSource,
@@ -31,6 +33,13 @@ interface UiMessage {
   tokens: number;
   pending: boolean;
   failed: boolean;
+  templateName?: string | null;
+}
+
+/** Treść pytania wysyłanego z pastylką: nazwa szablonu + opcjonalne uwagi lekarza. */
+export function templateQuestion(template: Pick<PromptTemplate, 'name'>, notes: string): string {
+  const base = `Przygotuj plan: ${template.name}`;
+  return notes.trim() ? `${base}\nUwagi lekarza: ${notes.trim()}` : base;
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -84,7 +93,17 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div class="flex items-center gap-2">
             <label class="text-xs font-semibold uppercase text-slate-500" for="patient">Pacjent</label>
-            <select id="patient" class="field !w-auto" [ngModel]="patientId()" (ngModelChange)="patientId.set($event)" [disabled]="streaming()">
+            <select
+              id="patient"
+              class="field !w-auto"
+              [class.!border-red-400]="needsPatient()"
+              [class.ring-2]="needsPatient()"
+              [class.ring-red-200]="needsPatient()"
+              [attr.aria-invalid]="needsPatient()"
+              [ngModel]="patientId()"
+              (ngModelChange)="patientId.set($event)"
+              [disabled]="streaming()"
+            >
               <option [ngValue]="null">— bez kontekstu pacjenta —</option>
               @for (p of patients(); track p.id) {
                 <option [ngValue]="p.id">{{ p.last_name }} {{ p.first_name }}</option>
@@ -116,6 +135,9 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
                 class="max-w-[92%] rounded-2xl px-4 py-3 text-sm shadow-sm sm:max-w-[80%]"
                 [class]="m.role === 'user' ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white'"
               >
+                @if (m.templateName) {
+                  <p class="mb-1 text-[11px] font-semibold uppercase tracking-wide" [class]="m.role === 'user' ? 'text-brand-100' : 'text-brand-700'">Szablon: {{ m.templateName }}</p>
+                }
                 @if (m.role === 'assistant') {
                   <div class="md break-words" [innerHTML]="m.content | markdown"></div>
                   @if (m.pending && m.content) {<span class="animate-pulse text-brand-600" aria-hidden="true">▍</span>}
@@ -159,12 +181,58 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
         </div>
 
         <form class="border-t border-slate-200 p-3" (ngSubmit)="send()">
+          @if (templates().length > 0) {
+            <div class="mb-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Szablon odpowiedzi">
+              <span class="mr-1 text-xs font-semibold uppercase text-slate-500">Szablon</span>
+              @for (t of templates(); track t.id) {
+                <span
+                  class="inline-flex items-center overflow-hidden rounded-full border text-xs font-medium transition"
+                  [class]="selectedTemplateId() === t.id ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:border-brand-400'"
+                >
+                  <button type="button" class="py-1 pl-3 pr-2" [attr.aria-pressed]="selectedTemplateId() === t.id" [title]="t.description" [disabled]="streaming()" (click)="toggleTemplate(t)">
+                    {{ t.name }}
+                  </button>
+                  <button
+                    type="button"
+                    class="border-l py-1 pl-1.5 pr-2.5"
+                    [class]="selectedTemplateId() === t.id ? 'border-brand-500' : 'border-slate-200 text-slate-400 hover:text-brand-700'"
+                    [attr.aria-label]="'Podgląd szablonu ' + t.name"
+                    [attr.aria-expanded]="previewId() === t.id"
+                    (click)="togglePreview(t)"
+                  >👁</button>
+                </span>
+              }
+              <a routerLink="/szablony" class="ml-1 text-xs font-medium text-brand-700 hover:underline">Moje szablony</a>
+            </div>
+          }
+          @if (previewTemplate(); as pt) {
+            <div class="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+              <div class="mb-1 flex items-start justify-between gap-2">
+                <p class="font-semibold text-slate-800">{{ pt.name }} <span class="font-normal text-slate-500">{{ pt.shared ? '· wspólny' : '· mój' }}</span></p>
+                <button type="button" class="text-slate-400 hover:text-slate-700" aria-label="Zamknij podgląd" (click)="previewId.set(null)">✕</button>
+              </div>
+              @if (pt.description) { <p class="mb-2 text-slate-600">{{ pt.description }}</p> }
+              <pre class="max-h-60 overflow-y-auto whitespace-pre-wrap font-sans text-slate-700">{{ pt.body }}</pre>
+              <p class="mt-2 text-[11px] text-slate-500">
+                Do szablonu dołączane są zasady: dobór tylko z listy, uzasadnienie danymi pacjenta, opis wykonania ze źródeł z bazy wiedzy.
+              </p>
+            </div>
+          }
+          @if (selectedTemplate(); as st) {
+            <p class="mb-2 text-xs" [class]="needsPatient() ? 'font-medium text-red-700' : 'text-slate-500'" role="status">
+              @if (needsPatient()) {
+                Wybierz pacjenta – szablon „{{ st.name }}” opiera plan na jego danych.
+              } @else {
+                Plan wg szablonu „{{ st.name }}”{{ st.long_answer ? ' – dłuższa odpowiedź, mocniejszy model (ok. 3–6 kredytów)' : '' }}. Możesz dopisać uwagi poniżej.
+              }
+            </p>
+          }
           <div class="flex items-end gap-2">
             <textarea
               class="field max-h-40 min-h-[2.75rem] flex-1 resize-y"
               rows="2"
               name="draft"
-              placeholder="Napisz pytanie… (Enter – wyślij, Shift+Enter – nowa linia)"
+              [placeholder]="selectedTemplate() ? 'Uwagi do planu (opcjonalnie)… Enter – wyślij' : 'Napisz pytanie… (Enter – wyślij, Shift+Enter – nowa linia)'"
               [ngModel]="draft()"
               (ngModelChange)="draft.set($event)"
               (keydown.enter)="onEnter($event)"
@@ -174,7 +242,7 @@ const EMPTY_USAGE: TokenCounter = { prompt_tokens: 0, completion_tokens: 0, tota
             @if (streaming()) {
               <button type="button" class="btn-secondary" (click)="stop()">Stop</button>
             } @else {
-              <button type="submit" class="btn-primary" [disabled]="!draft().trim()">Wyślij</button>
+              <button type="submit" class="btn-primary" [disabled]="!canSend()">Wyślij</button>
             }
           </div>
           <p class="mt-2 text-[11px] text-slate-400">
@@ -191,6 +259,7 @@ export class ChatComponent implements OnDestroy {
   protected readonly billing = inject(BillingService);
   protected readonly exhaustedMessage = EXHAUSTED_MESSAGE;
   private readonly patientsApi = inject(PatientsService);
+  private readonly templatesApi = inject(TemplatesService);
   private readonly scroller = viewChild<ElementRef<HTMLDivElement>>('scroller');
 
   protected readonly suggestions = [
@@ -208,6 +277,16 @@ export class ChatComponent implements OnDestroy {
   protected readonly status = signal('Łączenie…');
   protected readonly streaming = signal(false);
   protected readonly draft = signal('');
+  protected readonly templates = signal<PromptTemplate[]>([]);
+  protected readonly selectedTemplateId = signal<number | null>(null);
+  protected readonly previewId = signal<number | null>(null);
+  protected readonly selectedTemplate = computed(() => this.templates().find((t) => t.id === this.selectedTemplateId()) ?? null);
+  protected readonly previewTemplate = computed(() => this.templates().find((t) => t.id === this.previewId()) ?? null);
+  /** Szablon wymagający pacjenta wybrany bez pacjenta – wysyłka zablokowana. */
+  protected readonly needsPatient = computed(() => !!this.selectedTemplate()?.requires_patient && this.patientId() === null);
+  protected readonly canSend = computed(
+    () => !this.streaming() && !this.needsPatient() && (!!this.selectedTemplate() || !!this.draft().trim()),
+  );
 
   private nextId = 1;
   private abort: AbortController | null = null;
@@ -215,6 +294,7 @@ export class ChatComponent implements OnDestroy {
   constructor() {
     this.loadConversations();
     this.patientsApi.list().subscribe({ next: (list) => this.patients.set(list) });
+    this.templatesApi.list().subscribe({ next: (list) => this.templates.set(list) });
     // Wejście z historii pacjenta: /chat?conversation=<id>&patient=<id>
     const params = inject(ActivatedRoute).snapshot.queryParamMap;
     const patient = Number(params.get('patient'));
@@ -248,6 +328,14 @@ export class ChatComponent implements OnDestroy {
     }
   }
 
+  protected toggleTemplate(template: PromptTemplate): void {
+    this.selectedTemplateId.set(this.selectedTemplateId() === template.id ? null : template.id);
+  }
+
+  protected togglePreview(template: PromptTemplate): void {
+    this.previewId.set(this.previewId() === template.id ? null : template.id);
+  }
+
   protected ask(question: string): void {
     this.draft.set(question);
     void this.send();
@@ -274,6 +362,7 @@ export class ChatComponent implements OnDestroy {
             tokens: m.total_tokens,
             pending: false,
             failed: false,
+            templateName: m.template_name ?? null,
           })),
         );
         this.sessionUsage.set({
@@ -303,25 +392,34 @@ export class ChatComponent implements OnDestroy {
   }
 
   protected async send(): Promise<void> {
-    const text = this.draft().trim();
-    if (!text || this.streaming()) {
+    if (!this.canSend()) {
       return;
     }
+    const template = this.selectedTemplate();
+    const text = template ? templateQuestion(template, this.draft()) : this.draft().trim();
     this.draft.set('');
+    // Pastylka działa na jedno pytanie – kolejne pytania w rozmowie są już zwykłe.
+    this.selectedTemplateId.set(null);
+    this.previewId.set(null);
     this.streaming.set(true);
     this.status.set('Łączenie…');
 
     const assistantId = this.nextId + 1;
     this.messages.update((list) => [
       ...list,
-      { id: this.nextId++, role: 'user', content: text, sources: [], tokens: 0, pending: false, failed: false },
+      { id: this.nextId++, role: 'user', content: text, sources: [], tokens: 0, pending: false, failed: false, templateName: template?.name ?? null },
       { id: this.nextId++, role: 'assistant', content: '', sources: [], tokens: 0, pending: true, failed: false },
     ]);
 
     this.abort = new AbortController();
     try {
       const events = this.chatApi.stream(
-        { message: text, conversation_id: this.conversationId(), patient_id: this.patientId() },
+        {
+          message: text,
+          conversation_id: this.conversationId(),
+          patient_id: this.patientId(),
+          template_id: template?.id ?? null,
+        },
         this.abort.signal,
       );
       for await (const event of events) {

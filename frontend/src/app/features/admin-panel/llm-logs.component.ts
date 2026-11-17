@@ -9,6 +9,8 @@ const PAGE_SIZE = 50;
 const OPERATIONS = [
   { value: '', label: 'Wszystkie operacje' },
   { value: 'chat_rag', label: 'Odpowiedź asystenta (chat_rag)' },
+  { value: 'chat_template', label: 'Odpowiedź z szablonu (chat_template)' },
+  { value: 'exercise_extraction', label: 'Wyodrębnianie ćwiczeń' },
   { value: 'query_rewriting', label: 'Przepisanie zapytania' },
   { value: 'embedding_query', label: 'Embedding zapytania' },
   { value: 'seed_embedding', label: 'Embedding bazy wiedzy' },

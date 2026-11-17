@@ -16,6 +16,11 @@ class ChatState(TypedDict, total=False):
     question: str
     history: list[dict[str, str]]
     patient_context: str | None
+    # Tryb szablonu (pastylka): {"name", "body", "long_answer"}, opisy ćwiczeń z katalogu
+    # (dokumenty źródłowe) i nazwy ćwiczeń bez opisu w katalogu.
+    template: dict[str, Any] | None
+    template_documents: list[dict[str, Any]]
+    template_missing: list[str]
 
     rewritten_query: str
     filters: dict[str, str]

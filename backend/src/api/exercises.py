@@ -112,7 +112,7 @@ async def update_exercise(
         setattr(exercise, field, value.strip() if isinstance(value, str) else value)
     exercises.touch(exercise)
     if not exercise.key:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Podaj nazwę ćwiczenia")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Podaj nazwę ćwiczenia")
     session.add(exercise)
     await session.commit()
     await session.refresh(exercise)
@@ -140,7 +140,7 @@ async def add_alias(
     if exercise is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Nie znaleziono ćwiczenia")
     if not exercises.normalize_name(body.name):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Podaj nazwę")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Podaj nazwę")
     await exercises.assign_alias(session, exercise, body.name)
     await session.refresh(exercise)
     return (await _outs(session, [exercise]))[0]
@@ -160,7 +160,7 @@ async def match(
     """Sprawdza wklejoną listę nazw (np. bazę ćwiczeń etapu) – które mają opis w katalogu."""
     names = exercises.names_from_text(body.text)
     if not names:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Nie znaleziono nazw na liście")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Nie znaleziono nazw na liście")
     results = await exercises.match_names(session, names)
     found = await _outs(session, [r["exercise"] for r in results if r["exercise"]])
     by_id = {e.id: e for e in found}

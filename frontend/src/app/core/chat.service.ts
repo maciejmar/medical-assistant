@@ -30,7 +30,7 @@ export class ChatService {
    * ani nagłówka Authorization, dlatego używamy fetch i ReadableStream.
    */
   async *stream(
-    body: { message: string; conversation_id: string | null; patient_id: number | null },
+    body: { message: string; conversation_id: string | null; patient_id: number | null; template_id?: number | null },
     signal: AbortSignal,
   ): AsyncGenerator<ChatEvent> {
     const response = await fetch('/api/chat', {

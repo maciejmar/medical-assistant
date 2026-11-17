@@ -42,18 +42,23 @@ def local_client() -> AsyncOpenAI:
     return _local_client
 
 
-async def _chat_target(user_id: int | None) -> tuple[AsyncOpenAI, str, bool]:
-    """(klient, model, czy_lokalny): po wyczerpaniu kredytów użytkownika – model lokalny."""
+async def _chat_target(
+    user_id: int | None, model: str | None = None
+) -> tuple[AsyncOpenAI, str, bool]:
+    """(klient, model, czy_lokalny): po wyczerpaniu kredytów użytkownika – model lokalny
+    (także wtedy, gdy wywołanie prosi o mocniejszy model)."""
     from .billing import use_local_model  # import lokalny: billing importuje bazę i konfigurację
 
     if await use_local_model(user_id):
         return local_client(), settings.local_llm_model, True
-    return client, settings.vllm_chat_model, False
+    return client, model or settings.vllm_chat_model, False
 
 
-async def _create_chat(user_id: int | None, operation: str, **kwargs: Any) -> tuple[Any, str]:
+async def _create_chat(
+    user_id: int | None, operation: str, model: str | None = None, **kwargs: Any
+) -> tuple[Any, str]:
     """Wywołuje model docelowy; gdy lokalny jest niedostępny – awaryjnie model podstawowy."""
-    target, model, is_local = await _chat_target(user_id)
+    target, model, is_local = await _chat_target(user_id, model)
     try:
         return await target.chat.completions.create(model=model, **kwargs), model
     except Exception:
@@ -250,15 +255,18 @@ async def chat_stream(
     operation: str,
     temperature: float = 0.2,
     max_tokens: int = 1200,
+    model: str | None = None,
 ) -> AsyncIterator[str | Usage]:
-    """Zwraca kolejne fragmenty tekstu, a na końcu obiekt Usage z metrykami ze streamu vLLM."""
+    """Zwraca kolejne fragmenty tekstu, a na końcu obiekt Usage z metrykami ze streamu vLLM.
+    `model` – inny niż podstawowy model dla tego wywołania (np. szablony z długą odpowiedzią)."""
     started = time.monotonic()
     messages = (await anonymizer_for(user_id)).messages(messages)
-    model_name = settings.vllm_chat_model
+    model_name = model or settings.vllm_chat_model
     try:
         stream, model_name = await _create_chat(
             user_id,
             operation,
+            model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,

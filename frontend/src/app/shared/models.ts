@@ -90,6 +90,8 @@ export interface StoredChatMessage {
   sources: ChatSource[] | null;
   total_tokens: number;
   created_at: string;
+  /** Szablon (pastylka) użyty przy pytaniu. */
+  template_name?: string | null;
 }
 
 export interface PatientChatMessage extends StoredChatMessage {
