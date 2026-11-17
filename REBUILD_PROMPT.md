@@ -166,6 +166,9 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
   logo Webaby (`webabylogo-mark.png` – przycięty `webabylogo.png`, czarny znak odwrócony filtrem `invert` do bieli),
   „© <rok> Webaby. Wszelkie prawa zastrzeżone.”, link https://webaby.io, `mailto:contact@webaby.io` (na telefonie „Kontakt”),
   ikony social media (WhatsApp, Facebook, Instagram, X); `main` ma `pb-16`, żeby stopka nie zasłaniała treści.
+- **Favicon**: `src/favicon.ico` (16/32/48/64 px) i `assets/images/apple-touch-icon.png` (180 px) – sam znak Webaby
+  (bez napisu, nieczytelnego w 16 px) z `webabylogo-mark.png`, na białym zaokrąglonym kwadracie; `favicon.ico` dodany do
+  `assets` w `angular.json`, linki `rel="icon"` i `rel="apple-touch-icon"` w `index.html`.
   Logo Webaby (64 px, w stopce 36 px) także po prawej stronie paska nawigacji, jako link do webaby.io.
 - **Karta pacjenta** – edycja danych, nowa notatka (wpisywana lub **dyktowana**: `MediaRecorder` →
   `POST /api/audio/transcribe` → Whisper, język `pl`, limit 25 MB, dozwolone formaty audio), lista notatek;
@@ -544,6 +547,8 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-17** – Favicon z logo Webaby (sam znak na białym tle, `favicon.ico` + `apple-touch-icon.png`); wcześniej aplikacja
+  nie miała ikony karty.
 - **2026-11-17** – Szablony promptów (pastylki w czacie): 4 etapy terapii miofunkcjonalnej jako szablony wspólne,
   własne szablony lekarzy (`/szablony`, kopiowanie wspólnych), podgląd 👁, obowiązkowy pacjent, opisy ćwiczeń
   z katalogu jako źródła, mocniejszy model i dłuższa odpowiedź, etykieta szablonu w historii rozmowy.
