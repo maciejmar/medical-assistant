@@ -450,6 +450,34 @@ class KbPrivateDocument(SQLModel, table=True):
     created_at: datetime = _ts()
 
 
+class KbExercise(SQLModel, table=True):
+    """Ćwiczenie/technika wyodrębniona z dokumentu bazy wiedzy (katalog ćwiczeń).
+
+    Całe ćwiczenie w jednym rekordzie – niezależnie od podziału tekstu na fragmenty RAG – żeby
+    szablony z zamkniętą listą ćwiczeń dostawały dokładne opisy zamiast przypadkowych fragmentów.
+    Widoczność jak dokumentu źródłowego (wspólny / prywatny)."""
+
+    __tablename__ = "kb_exercises"
+
+    id: int | None = Field(default=None, primary_key=True)
+    document_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("kb_documents.id"), index=True, nullable=False)
+    )
+    number: str = Field(default="", max_length=20)
+    name: str = Field(max_length=300)
+    # Nazwa znormalizowana (małe litery, bez diakrytyków i cudzysłowów) – do dopasowania nazw.
+    key: str = Field(max_length=300, index=True)
+    goal: str = Field(default="", sa_column=Column(Text, nullable=False))
+    tools: str = Field(default="", sa_column=Column(Text, nullable=False))
+    description: str = Field(default="", sa_column=Column(Text, nullable=False))
+    page: int | None = Field(default=None)
+    complete: bool = Field(default=True)
+    # Sprawdzone/poprawione przez administratora – ponowne wyodrębnianie go nie nadpisuje.
+    verified: bool = Field(default=False)
+    created_at: datetime = _ts()
+    updated_at: datetime = _ts()
+
+
 class OcrCacheEntry(SQLModel, table=True):
     """Pamięć podręczna OCR per silnik: (SHA-256 obrazu, klucz silnika z parametrami).
     Pozwala porównywać i przełączać silniki bez utraty wcześniejszych odczytów."""

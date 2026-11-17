@@ -79,6 +79,7 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `llm_calls` | user_id, operation, model_name, request (JSON – wiadomości **po anonimizacji**), response, status, error, tokeny, duration_ms |
 | `kb_documents` | title, filename, category, audience, icd10, icd11, tags, text (pełny odczytany tekst), chunks, status (`pending`/`indexed`/`error`), error, uploaded_by, source_path (import z katalogu), content_hash, pages, created_at, indexed_at |
 | `kb_private_documents` | document_id (PK → kb_documents), owner_id (→ users) – dokument prywatny; brak wpisu = wiedza wspólna |
+| `kb_exercises` | katalog ćwiczeń: document_id (→ kb_documents), number, name, key (nazwa znormalizowana), goal, tools, description, page, complete, verified, created_at, updated_at; usuwane razem z dokumentem |
 | `kb_ocr_results` | (sha256 obrazu, engine = klucz silnika z parametrami) PK, text, confidence – pamięć podręczna OCR per silnik |
 | `kb_ocr_pages` | sha256, text, confidence – pierwotna pamięć OCR Tesseracta (tylko odczyt; traktowana jak wyniki klucza `tesseract:pol+eng:c60`) |
 
@@ -397,6 +398,26 @@ Odczyt/OCR → Embedding → Gotowe, procent ważony liczbą stron (zdjęcia: 85
 szacowany czas do końca (po 3% pracy), bieżący dokument z paskiem „OCR: strona x z y” / „Embedding: fragment x z y”,
 liczniki (nowe/zaktualizowane/bez zmian/błędy), lista 10 ostatnio przetworzonych dokumentów.
 
+### Katalog ćwiczeń (`src/exercises.py`, `api/exercises.py`, `/admin/cwiczenia`)
+
+Po co: fragmenty RAG (~1500 zn.) rozcinają opisy ćwiczeń (nagłówek w jednym fragmencie, opis w następnym), a reranker
+słabo dopasowuje polskie nazwy – np. „deska na dźwigu” dostawała opis „grot – deska”. Katalog trzyma każde ćwiczenie
+w jednym rekordzie, a szablony z zamkniętą listą ćwiczeń dostaną dokładne opisy.
+- **Kandydaci:** dokumenty ze znacznikami katalogu (`CEL:`, `OPIS TECHNIKI`, `(P)OTRZEBNE NARZ…`, `SPOSÓB WYKONANIA`);
+  domyślnie zaznaczone te z ≥ 5 znacznikami i bez wyodrębnionych ćwiczeń.
+- **Wyodrębnianie (w tle, jedno naraz, koszt w kredytach admina, operacja `exercise_extraction`):** tekst dokumentu
+  w oknach 6000 zn. z zakładką 1500 zn. (cięcie na końcu wiersza), okna bez znaczników pomijane, 4 okna równolegle;
+  model zwraca JSON `{exercises: [{number, name, page, goal, tools, description, complete}]}` – poprawia tylko oczywiste
+  błędy OCR, bez dopisywania treści; strona z najbliższego znacznika „# Strona N”. Duplikaty z zakładek scalane
+  (pełny opis > ucięty > dłuższy). Ponowne wyodrębnienie zastępuje niesprawdzone ćwiczenia dokumentu, sprawdzone
+  (`verified`, ustawiane przy edycji lub przyciskiem „Sprawdzone”) zostają.
+- **Dopasowanie nazw** (`match_names`): klucz = małe litery bez diakrytyków/cudzysłowów/interpunkcji; dokładne albo
+  `difflib` ≥ 0,86 (błędy OCR); warianty nazwy: pełna, część w cudzysłowie, część przed „ – ”/„ (”/„: ”. Widoczność jak
+  dokumentu (wspólne + prywatne danego użytkownika). `POST /admin/exercises/match` przyjmuje wklejoną listę
+  (punktory/numeracja/przecinki pomijane, nagłówki WIELKIMI LITERAMI i wiersze z „:” na końcu też).
+- **UI:** lista kandydatów z checkboxami i paskiem postępu, „Sprawdź listę ćwiczeń” (✓ z opisem / ✗ brak w katalogu),
+  katalog z wyszukiwaniem bez diakrytyków, filtrem „tylko niesprawdzone”, edycją i usuwaniem. Link z nagłówka Bazy wiedzy.
+
 ## 11. API (prefiks `/api`)
 
 - `auth`: `POST /register`, `POST /login`, `GET /me`
@@ -491,6 +512,10 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-17** – Katalog ćwiczeń (`kb_exercises`, `/admin/cwiczenia`): jednorazowe wyodrębnienie ćwiczeń z dokumentów
+  bazy wiedzy przez LLM (okna z zakładką, scalanie duplikatów, poprawa OCR bez dopisywania treści), przegląd i edycja
+  administratora, sprawdzanie listy nazw względem katalogu. Przygotowanie pod szablony promptów z zamkniętą listą
+  ćwiczeń (RAG rozcinał opisy ćwiczeń między fragmenty).
 - **2026-11-16** – Logo Webaby w pasku nawigacji nie rozciąga się w pionie: link `shrink-0`, obrazek `max-w-none
   object-contain` (ciasny flex zwężał szerokość przy stałej wysokości `h-16`); to samo zabezpieczenie w stopce.
 - **2026-11-13** – Klient rozliczany w kredytach (1 kredyt = 0,01 zł): co miesiąc od początku pierwszego okresu kredyty

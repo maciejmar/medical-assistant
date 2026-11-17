@@ -61,7 +61,10 @@ function apiError(err: unknown, fallback: string): string {
   template: `
     <div class="mb-6">
       <a routerLink="/admin" class="mb-1 inline-block text-sm text-brand-700 hover:underline">← Panel administratora</a>
-      <h1 class="text-2xl font-bold">Baza wiedzy</h1>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h1 class="text-2xl font-bold">Baza wiedzy</h1>
+        <a routerLink="/admin/cwiczenia" class="btn-secondary">Katalog ćwiczeń →</a>
+      </div>
       <p class="text-sm text-slate-500">
         Materiały RAG: dzielone na fragmenty, indeksowane w Qdrant i od razu dostępne dla asystenta (z cytowaniem w źródłach).
         Wbudowanych haseł: {{ builtin() }}.

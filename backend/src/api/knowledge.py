@@ -10,11 +10,11 @@ from pathlib import Path, PurePath
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile, status
-from sqlmodel import col, select
+from sqlmodel import col, delete, select
 
 from ..auth import CurrentAdmin, SessionDep
 from ..config import settings
-from ..database import KbDocument, KbPrivateDocument, User
+from ..database import KbDocument, KbExercise, KbPrivateDocument, User
 from ..kb_import import (
     UnsafePathError,
     job,
@@ -334,6 +334,7 @@ async def delete_document(document_id: int, session: SessionDep, admin: CurrentA
             "Nie udało się usunąć fragmentów z Qdrant – dokument pozostawiono, spróbuj ponownie.",
         ) from exc
     await set_document_owner(document_id, None)
+    await session.exec(delete(KbExercise).where(col(KbExercise.document_id) == document_id))
     await session.delete(doc)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

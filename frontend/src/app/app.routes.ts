@@ -61,6 +61,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/admin-panel/goldset.component').then((m) => m.GoldsetComponent),
   },
   {
+    path: 'admin/cwiczenia',
+    canActivate: [adminGuard],
+    loadComponent: () =>
+      import('./features/admin-panel/exercises.component').then((m) => m.ExercisesComponent),
+  },
+  {
     path: 'admin/knowledge',
     canActivate: [adminGuard],
     loadComponent: () =>

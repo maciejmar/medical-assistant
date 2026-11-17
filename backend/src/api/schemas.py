@@ -629,3 +629,64 @@ class DoctorEventOut(EventOut):
 
     patient_id: int
     patient_name: str
+
+
+class ExerciseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    document_id: int
+    document_title: str = ""
+    number: str
+    name: str
+    goal: str
+    tools: str
+    description: str
+    page: int | None
+    complete: bool
+    verified: bool
+    updated_at: datetime
+
+
+class ExerciseIn(BaseModel):
+    name: str = Field(min_length=1, max_length=300)
+    number: str = Field(default="", max_length=20)
+    goal: str = Field(default="", max_length=5000)
+    tools: str = Field(default="", max_length=2000)
+    description: str = Field(default="", max_length=10000)
+    page: int | None = Field(default=None, ge=0, le=100000)
+    verified: bool = True
+
+
+class ExerciseCandidateOut(BaseModel):
+    document_id: int
+    title: str
+    markers: int
+    exercises: int
+
+
+class ExtractionIn(BaseModel):
+    document_ids: list[int] = Field(min_length=1, max_length=50)
+
+
+class ExtractionStatusOut(BaseModel):
+    status: Literal["running", "done", "failed", "cancelled"]
+    document_ids: list[int]
+    total_windows: int
+    done_windows: int
+    found: int
+    tokens: int
+    current: str
+    error: str | None
+    started_at: str
+    finished_at: str | None
+
+
+class ExerciseMatchIn(BaseModel):
+    text: str = Field(min_length=1, max_length=50000)
+
+
+class ExerciseMatchOut(BaseModel):
+    name: str
+    score: float
+    exercise: ExerciseOut | None

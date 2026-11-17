@@ -17,6 +17,7 @@ from ..database import (
     ChatMessage,
     CreditTopUp,
     KbDocument,
+    KbExercise,
     KbPrivateDocument,
     LlmCall,
     Patient,
@@ -233,6 +234,7 @@ async def delete_user(user_id: int, session: SessionDep, admin: CurrentAdmin) ->
         await session.exec(
             delete(KbPrivateDocument).where(col(KbPrivateDocument.owner_id) == user.id)
         )
+        await session.exec(delete(KbExercise).where(col(KbExercise.document_id).in_(private_ids)))
         await session.exec(delete(KbDocument).where(col(KbDocument.id).in_(private_ids)))
     await session.exec(
         update(KbDocument).where(col(KbDocument.uploaded_by) == user.id).values(uploaded_by=None)
