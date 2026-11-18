@@ -151,3 +151,18 @@ def ocr_image(data: bytes) -> OcrResult:
         raise OcrUnavailableError(
             "Brak programu tesseract na serwerze (obraz Dockera: tesseract-ocr, tesseract-ocr-pol)."
         ) from exc
+
+
+def ocr_embedded_image(data: bytes) -> OcrResult:
+    """OCR ilustracji osadzonej w PDF: bez wykrywania obrotu (obrazki w dokumentach są
+    proste, a fotografie bez tekstu kosztowałyby cztery odczyty). Operacja blokująca."""
+    try:
+        image = Image.open(io.BytesIO(data)).convert("L")
+    except Exception as exc:
+        raise ValueError(f"Nie udało się otworzyć obrazu: {exc}") from exc
+    try:
+        return _read(_resized(image, settings.ocr_max_side_px))
+    except pytesseract.TesseractNotFoundError as exc:
+        raise OcrUnavailableError(
+            "Brak programu tesseract na serwerze (obraz Dockera: tesseract-ocr, tesseract-ocr-pol)."
+        ) from exc

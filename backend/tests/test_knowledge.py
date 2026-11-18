@@ -167,3 +167,65 @@ async def test_indexing_failure_keeps_document_for_retry(
     )
     assert response.status_code == 201
     assert response.json()["status"] == "error" and "vLLM" in response.json()["error"]
+
+
+def _image_pdf(*sizes: tuple[int, int], repeat: bool = False) -> bytes:
+    """PDF ze stronami-obrazkami (bez warstwy tekstowej), jak slajd z wklejoną ulotką."""
+    from PIL import Image
+
+    images = [
+        Image.new("RGB", size, (255, 255, 255) if repeat else (i * 40, 90, 90))
+        for i, size in enumerate(sizes)
+    ]
+    buffer = io.BytesIO()
+    images[0].save(buffer, format="PDF", save_all=True, append_images=images[1:])
+    return buffer.getvalue()
+
+
+def test_pdf_reads_text_from_embedded_illustrations(monkeypatch):
+    calls = []
+
+    def fake_ocr(data):
+        calls.append(len(data))
+        return knowledge_ocr_result(
+            "Ćwiczenia czynne: unoszenie szerokiego języka za górne siekacze"
+        )
+
+    monkeypatch.setattr(knowledge, "ocr_embedded_image", fake_ocr)
+    text = extract_text(_image_pdf((800, 1000), (120, 120)), ".pdf")
+    assert "[Tekst z ilustracji]" in text and "unoszenie szerokiego języka" in text
+    assert len(calls) == 1  # obrazek 120 px (ikona/logo) pominięty
+
+
+def test_pdf_ocr_skips_repeated_images(monkeypatch):
+    calls = []
+
+    def fake_ocr(data):
+        calls.append(1)
+        return knowledge_ocr_result(
+            "Logo gabinetu i tekst stopki powtarzany na każdym slajdzie " * 3
+        )
+
+    monkeypatch.setattr(knowledge, "ocr_embedded_image", fake_ocr)
+    extract_text(_image_pdf((800, 600), (800, 600), (800, 600), repeat=True), ".pdf")
+    assert len(calls) == 1
+
+
+def test_pdf_ocr_can_be_disabled(monkeypatch):
+    monkeypatch.setattr(knowledge.settings, "kb_pdf_image_ocr", False)
+    monkeypatch.setattr(knowledge, "ocr_embedded_image", lambda data: pytest.fail("OCR wyłączony"))
+    with pytest.raises(ExtractionError, match="skan"):
+        extract_text(_image_pdf((800, 1000)), ".pdf")
+
+
+def test_glued_ratio():
+    assert knowledge.glued_ratio("Ćwiczenia czynne przed zabiegiem frenulotomii") == 0
+    glued = "M.Ośko,Stymulacjaobszarujamyustnejprzedipozabiegufrenulotomii ok"
+    assert knowledge.glued_ratio(glued) == 0.5
+    assert knowledge.glued_ratio("https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5021967/ x") == 0
+
+
+def knowledge_ocr_result(text: str):
+    from src.ocr import OcrResult
+
+    return OcrResult(text=text, confidence=90.0, words=len(text.split()))

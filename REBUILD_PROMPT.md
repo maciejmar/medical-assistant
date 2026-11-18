@@ -381,7 +381,12 @@ techniki terapii – zasilane przy starcie, `python -m src.seed [--force]`) oraz
 **Katalog materiałów** – na serwerze `/opt/logoped-kb`, w kontenerze `/kb` (zapis dozwolony; lokalnie
 domyślnie `../laryngolog`, zmienna `KB_SOURCE_HOST_DIR`). Import (`src/kb_import.py`, idempotentny):
 
-- pliki tekstowe `.pdf` (z warstwą tekstową – skany odrzucane), `.docx`, `.odt`, `.md`, `.txt` → po jednym dokumencie;
+- pliki tekstowe `.pdf`, `.docx`, `.odt`, `.md`, `.txt` → po jednym dokumencie. PDF (`knowledge._pdf_text`): warstwa
+  tekstowa strony (gdy ≥2% „słów” to sklejenia ≥25 liter bez `/`/`http` – `glued_ratio` – próba
+  `extract_text(extraction_mode="layout")`, wybór wariantu z mniejszą liczbą sklejeń) + OCR osadzonych ilustracji
+  (`ocr.ocr_embedded_image` – Tesseract bez wykrywania obrotu; pomijane obrazki < `KB_PDF_IMAGE_MIN_PX`=300 px
+  i powtórzenia po sha256, limit `KB_PDF_IMAGE_MAX`=80 na dokument, wyłącznik `KB_PDF_IMAGE_OCR`), dopisany do strony
+  jako „[Tekst z ilustracji]”. Brak tesseracta → sama warstwa tekstowa. PDF z mniej niż 40 zn./stronę po OCR odrzucany;
 - zdjęcia stron `.jpg/.png/…` → **podkatalog = jeden dokument** (strony w kolejności EXIF DateTimeOriginal);
   zdjęcia luzem w katalogu głównym dzielone na dokumenty wg sesji (przerwa > `KB_SESSION_GAP_MINUTES=30`);
 - duplikaty (SHA-256) przetwarzane raz: dla plików tekstowych wygrywa kopia położona najpłycej, dla zdjęć – z podkatalogu;
@@ -559,6 +564,9 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-18** – PDF: OCR tekstu z osadzonych ilustracji i naprawa sklejonych słów. Dokument „Wędzidełko” (slajdy)
+  miał zestaw ćwiczeń przed zabiegiem jako obrazek – pypdf czyta tylko warstwę tekstową, więc ćwiczeń nie było w indeksie,
+  a „Przetwórz ponownie” nie uruchamiało OCR dla PDF. Istniejące PDF-y trzeba przetworzyć ponownie.
 - **2026-11-17** – „Sprawdź wyszukiwanie” w Bazie wiedzy (`search_debug.py`, `POST /admin/knowledge/search-test`):
   nowy dokument (wędzidełka) był zaindeksowany i wspólny, a nie pojawiał się w źródłach – narzędzie pokazuje etap,
   na którym fragment odpada (kandydaci, ocena rerankera, miejsca w wyszukiwaniu gęstym/po słowach).

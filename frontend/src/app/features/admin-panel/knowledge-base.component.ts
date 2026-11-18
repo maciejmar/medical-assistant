@@ -169,7 +169,7 @@ function apiError(err: unknown, fallback: string): string {
 
     <form class="card mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" [formGroup]="form" (ngSubmit)="upload(fileInput)">
       <div class="sm:col-span-2">
-        <label class="label" for="kb-file">Pojedynczy plik (PDF z tekstem, DOCX, ODT, MD, TXT, zdjęcie strony · do 20 MB)</label>
+        <label class="label" for="kb-file">Pojedynczy plik (PDF – także tekst z ilustracji, DOCX, ODT, MD, TXT, zdjęcie strony · do 20 MB)</label>
         <input id="kb-file" #fileInput class="field" type="file" [accept]="accept" (change)="pickFile(fileInput.files)" />
       </div>
       <div class="sm:col-span-2">

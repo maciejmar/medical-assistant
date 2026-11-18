@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     ocr_languages: str = "pol+eng"
     ocr_min_word_confidence: int = 60
     ocr_max_side_px: int = 2600
+    # PDF: OCR tekstu z ilustracji na stronach (np. ulotka wklejona w slajd jako obrazek).
+    kb_pdf_image_ocr: bool = True
+    kb_pdf_image_min_px: int = 300  # mniejsze obrazki (ikony, logo) są pomijane
+    kb_pdf_image_max: int = 80  # limit obrazków na dokument (czas OCR)
     history_window: int = 10
 
     llm_log_enabled: bool = True

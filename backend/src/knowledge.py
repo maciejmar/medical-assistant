@@ -1,12 +1,13 @@
 """Materiały bazy wiedzy (wgrane w panelu lub zaimportowane z katalogu): odczyt tekstu, podział
 na fragmenty, indeksowanie w Qdrant (te same wektory gęste + rzadkie co dokumenty wbudowane).
 
-Obsługiwane formaty: .pdf (z warstwą tekstową), .docx, .odt, .md, .txt oraz zdjęcia stron
-(.jpg/.png… – OCR druku, src.ocr). Skany PDF bez tekstu są odrzucane – zdjęcia stron należy
-wgrać jako obrazy (import katalogu) albo wcześniej wykonać transkrypcję do .md.
+Obsługiwane formaty: .pdf, .docx, .odt, .md, .txt oraz zdjęcia stron (.jpg/.png… – OCR druku,
+src.ocr). PDF: warstwa tekstowa + OCR tekstu z osadzonych ilustracji (KB_PDF_IMAGE_OCR); PDF bez
+tekstu nawet po OCR jest odrzucany.
 """
 
 import asyncio
+import hashlib
 import io
 import logging
 import re
@@ -21,7 +22,7 @@ from sqlmodel import col, select
 from .config import settings
 from .database import KbDocument, KbPrivateDocument, session_factory, utcnow
 from .llm import embed
-from .ocr import IMAGE_EXTENSIONS, get_engine
+from .ocr import IMAGE_EXTENSIONS, OcrUnavailableError, get_engine, ocr_embedded_image
 from .seed import document_id, embedding_text
 from .vector_store import OWNER_FIELD, vector_store
 
@@ -40,19 +41,97 @@ class ExtractionError(ValueError):
     pass
 
 
+_GLUED_WORD_CHARS = 25
+_IMAGE_TEXT_MARKER = "[Tekst z ilustracji]"
+
+
+def glued_ratio(text: str) -> float:
+    """Udział „słów” sklejonych z kilku (≥25 liter bez spacji; adresy WWW się nie liczą) –
+    objaw warstwy tekstowej PDF bez spacji między wyrazami."""
+    words = text.split()
+    if not words:
+        return 0.0
+    glued = sum(
+        1 for w in words if len(w) >= _GLUED_WORD_CHARS and "/" not in w and "http" not in w.lower()
+    )
+    return glued / len(words)
+
+
+def _page_text(page) -> str:
+    """Tekst strony; gdy słowa są posklejane, próbuje trybu układu (layout) pypdf, który
+    wylicza spacje z pozycji znaków – wybiera wariant z mniejszą liczbą sklejeń."""
+    plain = (page.extract_text() or "").strip()
+    if glued_ratio(plain) < 0.02:
+        return plain
+    try:
+        layout = page.extract_text(extraction_mode="layout") or ""
+    except Exception:  # tryb layout bywa zawodny przy nietypowych czcionkach
+        return plain
+    layout = re.sub(r"[ \t]{2,}", " ", layout)
+    layout = "\n".join(line.strip() for line in layout.splitlines() if line.strip())
+    return layout if glued_ratio(layout) < glued_ratio(plain) else plain
+
+
+def _page_image_texts(page, seen: set[str], budget: list[int]) -> list[str]:
+    """OCR ilustracji strony (pomija małe, powtarzające się – np. logo na każdym slajdzie –
+    i te bez rozpoznanego druku)."""
+    texts: list[str] = []
+    try:
+        images = list(page.images)
+    except Exception as exc:
+        logger.info("Nie udało się odczytać obrazków strony PDF: %s", exc)
+        return texts
+    for image in images:
+        if budget[0] <= 0:
+            break
+        try:
+            width, height = image.image.size
+            data = image.data
+        except Exception:
+            continue
+        if min(width, height) < settings.kb_pdf_image_min_px:
+            continue
+        digest = hashlib.sha256(data).hexdigest()
+        if digest in seen:
+            continue
+        seen.add(digest)
+        budget[0] -= 1
+        try:
+            result = ocr_embedded_image(data)
+        except OcrUnavailableError:
+            raise
+        except Exception as exc:
+            logger.info("OCR ilustracji w PDF nie powiódł się: %s", exc)
+            continue
+        if len(result.text) >= 20:
+            texts.append(result.text)
+    return texts
+
+
 def _pdf_text(data: bytes) -> str:
     try:
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted:
             raise ExtractionError("PDF jest zaszyfrowany – zdejmij hasło i wgraj ponownie.")
-        pages = [(page.extract_text() or "").strip() for page in reader.pages]
+        seen: set[str] = set()
+        budget = [settings.kb_pdf_image_max]
+        pages: list[str] = []
+        for page in reader.pages:
+            parts = [_page_text(page)]
+            if settings.kb_pdf_image_ocr:
+                for text in _page_image_texts(page, seen, budget):
+                    parts.append(f"{_IMAGE_TEXT_MARKER}\n{text}")
+            pages.append("\n\n".join(p for p in parts if p))
     except PdfReadError as exc:
         raise ExtractionError(f"Nie udało się odczytać pliku PDF: {exc}") from exc
+    except OcrUnavailableError:  # brak tesseracta – sama warstwa tekstowa
+        logger.warning("OCR ilustracji w PDF niedostępny – brak programu tesseract")
+        pages = [_page_text(page) for page in reader.pages]
     text = "\n\n".join(p for p in pages if p)
     if len(text) < _MIN_CHARS_PER_PDF_PAGE * max(1, len(pages)):
         raise ExtractionError(
-            "PDF nie zawiera warstwy tekstowej (to prawdopodobnie skan). Wykonaj transkrypcję "
-            "(np. skryptem logop.py) i wgraj wynikowy plik .md."
+            "PDF nie zawiera tekstu do odczytania (skan, którego OCR nie rozpoznał). Wgraj zdjęcia "
+            "stron jako obrazy albo wykonaj transkrypcję do pliku .md."
         )
     return text
 
