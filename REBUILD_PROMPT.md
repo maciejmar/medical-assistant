@@ -205,7 +205,10 @@ Wygłos: …” (`formatPositions`/`parsePositions`; tekst bez etykiety, np. dok
   dorosła; sekcje A. Wywiad ogólny, B. Pozycja spoczynkowa i oddech, C. Budowa i sprawność aparatu artykulacyjnego,
   D. Żuchwa, E. Połykanie, F. Gryzienie i żucie, G. Wrażliwość, odruchy i artykulacja; 47 punktów z „Co oceniamy”,
   artykulacja 9 grup głosek z `@pozycje`) oraz `backend/src/ankyloglossia_template.txt` – „Karta badania – diagnoza
-  ankyloglosji” (12 prób z „Jak wykonać” i „Na co zwracamy uwagę”). Jedno pytanie w wierszu, `## ` = nagłówek sekcji,
+  ankyloglosji” (sekcja „Próby funkcjonalne i palpacyjne”: 16 prób z „Jak wykonać” i „Na co zwracamy uwagę”, próba ze
+  zgłębnikiem z „Uwaga: próba opcjonalna”; sekcja „Ostateczna decyzja”: realizacja funkcji prawidłowa/nieprawidłowa
+  z „Uwagą diagnostyczną”, czy pacjent zbuduje funkcje, czy zasadne manualne opracowanie tkanek, typ wędzidełka wg
+  E. Coryllos z opisem typów I–IV jako podpowiedziami; 22 wiersze z nagłówkami). Jedno pytanie w wierszu, `## ` = nagłówek sekcji,
   `# ` = komentarz.
   Nagłówki w tabeli – wiersz sekcji bez pola odpowiedzi i nagrywania, numeracja pytań pomija sekcje. „Wczytaj aktualny
   szablon” (`POST …/interview/reset`) zastępuje pytania (usuwa odpowiedzi i nagrania; zatwierdzona migawka zostaje do
@@ -584,6 +587,9 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-20** – Uaktualniona „Karta badania – diagnoza ankyloglosji” (z PDF): 16 prób (nowe: palpacja wędzidełka i dna
+  jamy ustnej, manualne uniesienie masy języka, pozycja spoczynkowa, budowa podniebienia; rozszerzone opisy), sekcja
+  „Ostateczna decyzja” i klasyfikacja wg E. Coryllos. Karty już założone u pacjentów – „Wczytaj aktualny szablon”.
 - **2026-11-20** – Nowy „Uniwersalny wywiad i badanie logopedyczne” (47 punktów, sekcje A–G, podpowiedzi „Co oceniamy”,
   artykulacja w nagłosie/śródgłosie/wygłosie) i drugi formularz „Karta badania – diagnoza ankyloglosji” (12 prób) –
   przełącznik nad kartą z animacją przejścia; osobne szablony, zatwierdzanie i kontekst LLM. Nowe tabele

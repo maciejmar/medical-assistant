@@ -239,8 +239,13 @@ def test_default_template_comes_from_form_with_sections():
     assert "Artykulacja – szereg syczący | Głoski: s, z, c, dz | @pozycje" in questions
     assert not any(q.startswith("# ") and not q.startswith("## ") for q in questions)
     ankylo = interview_module.DEFAULTS["ankyloglossia"]
-    assert len(ankylo) == 12 and ankylo[1].startswith("Lingual Palatal Suction | Jak wykonać:")
-    assert interview_module.question_title(ankylo[1]) == "Lingual Palatal Suction"
+    assert len(ankylo) == 22 and ankylo[0] == "## Próby funkcjonalne i palpacyjne"
+    assert "## Ostateczna decyzja" in ankylo
+    assert ankylo[-1].startswith("Typ wędzidełka wg klasyfikacji E. Coryllos | Typ I:")
+    assert (
+        interview_module.question_title(ankylo[2])
+        == "Lingual Palatal Suction (LPS) – próba maksymalnego przyssania języka do podniebienia"
+    )
 
 
 async def test_reset_replaces_questions_with_current_template(client, make_headers, monkeypatch):
@@ -286,7 +291,7 @@ async def test_ankyloglossia_form_is_separate_and_feeds_llm(client, make_headers
     base = f"/api/patients/{pid}/interview"
     interview = (await client.get(base, headers=doctor)).json()["items"]
     exam = (await client.get(f"{base}?form=ankyloglossia", headers=doctor)).json()
-    assert len(exam["items"]) == 12 and exam["status"] == "draft"
+    assert len(exam["items"]) == 22 and exam["status"] == "draft"
     assert {i["id"] for i in exam["items"]}.isdisjoint({i["id"] for i in interview})
     # Ponowne otwarcie nie zakłada formularza drugi raz; wywiad ma nadal swoje pytania.
     again = (await client.get(f"{base}?form=ankyloglossia", headers=doctor)).json()["items"]
@@ -302,11 +307,11 @@ async def test_ankyloglossia_form_is_separate_and_feeds_llm(client, make_headers
     )
     assert added.status_code == 201
     items = (await client.get(f"{base}?form=ankyloglossia", headers=doctor)).json()["items"]
-    assert items[-1]["question"] == "Próba własna" and len(items) == 13
+    assert items[-1]["question"] == "Próba własna" and len(items) == 23
 
     approved = await client.post(
         f"{base}/approve?form=ankyloglossia",
-        json=_payload(items, a3="Efekt struny, wysunięcie ograniczone"),
+        json=_payload(items, a4="Efekt struny, wysunięcie ograniczone"),
         headers=doctor,
     )
     assert approved.json()["status"] == "approved"
@@ -314,7 +319,7 @@ async def test_ankyloglossia_form_is_separate_and_feeds_llm(client, make_headers
 
     await client.post("/api/chat", json={"message": "Co dalej?", "patient_id": pid}, headers=doctor)
     context = fake.states[-1]["patient_context"]
-    assert "[Karta badania – diagnoza ankyloglosji]" in context
+    assert "[Karta badania – diagnoza ankyloglosji – Próby funkcjonalne i palpacyjne]" in context
     assert "- Wysuwanie języka\n  Odpowiedź: Efekt struny, wysunięcie ograniczone" in context
     assert "Jak wykonać" not in context
 
@@ -322,10 +327,10 @@ async def test_ankyloglossia_form_is_separate_and_feeds_llm(client, make_headers
     removed = await client.delete(f"{base}/items/{items[-1]['id']}", headers=doctor)
     assert removed.status_code == 204
     exam = (await client.get(f"{base}?form=ankyloglossia", headers=doctor)).json()
-    assert len(exam["items"]) == 12 and exam["status"] == "draft"
+    assert len(exam["items"]) == 22 and exam["status"] == "draft"
 
     reset = await client.post(f"{base}/reset?form=ankyloglossia", headers=doctor)
-    assert len(reset.json()["items"]) == 12
+    assert len(reset.json()["items"]) == 22
     assert len((await client.get(base, headers=doctor)).json()["items"]) == len(interview)
 
     assert (await client.delete(f"/api/patients/{pid}", headers=doctor)).status_code == 204
@@ -343,6 +348,6 @@ async def test_ankyloglossia_template_is_editable_separately(client, make_header
     assert saved.json()["questions"] == ["Próba A", "Próba B"]
     assert (await client.get(url, headers=admin)).json()["is_default"] is True
     reset = await client.delete(f"{url}?form=ankyloglossia", headers=admin)
-    assert len(reset.json()["questions"]) == 12
+    assert len(reset.json()["questions"]) == 22
     bad = await client.get(f"{url}?form=inne", headers=admin)
     assert bad.status_code == 422
