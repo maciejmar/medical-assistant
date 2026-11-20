@@ -1,0 +1,16 @@
+# Domyślny szablon: „Karta badania – diagnoza ankyloglosji”.
+# Format jak w interview_template.txt: Tytuł | Etykieta: podpowiedź | … ; „## ” – nagłówek sekcji.
+# Administrator może nadpisać szablon w panelu (/admin → Szablon wywiadu → Diagnoza ankyloglosji).
+
+Uniesienie języka do brodawki przysiecznej | Jak wykonać: Przy odwiedzeniu żuchwy na ok. 3 palce pacjenta unieść język do brodawki przysiecznej. | Na co zwracamy uwagę: Szerokość języka, pionizacja, nalot, dwudzielność apeksu, asymetria, zakres odwiedzenia żuchwy, siła i napięcie mięśniowe, kompensacje.
+Lingual Palatal Suction | Jak wykonać: Przy odwiedzonej żuchwie maksymalnie przyssać język do podniebienia i utrzymać pozycję. | Na co zwracamy uwagę: Możliwość uzyskania i utrzymania przyssania, zakres kontaktu języka z podniebieniem, praca mediodorsum, kompensacje.
+Lateralizacja języka – dotykanie ostatniego zęba | Jak wykonać: Przy odwiedzonej żuchwie dotykać apeksem ostatniego zęba łuku zębowego po prawej i lewej stronie. | Na co zwracamy uwagę: Zakres ruchów lateralnych, symetria, niezależność języka od żuchwy, kompensacje.
+Wysuwanie języka | Jak wykonać: Przy odwiedzonej żuchwie maksymalnie wysunąć język z jamy ustnej. | Na co zwracamy uwagę: Zakres wysunięcia, dwudzielność apeksu, asymetria, efekt struny – podłużne wgłębienie w części grzbietowej języka, kształt języka, kompensacje.
+Zakrywanie górnej wargi szerokim językiem | Jak wykonać: Przy odwiedzonej żuchwie wysunąć i poszerzyć język tak, aby zakryć nim górną wargę. | Na co zwracamy uwagę: Szerokość, elastyczność, zakres wysunięcia i uniesienia, symetria, kompensacje.
+Unoszenie masy języka na szpatułce | Jak wykonać: Unieść masę języka na szpatułce z tłoczeniem. | Na co zwracamy uwagę: Zakres uniesienia, napięcie tkanek, ruchomość języka, wędzidełko, dno jamy ustnej. Ocena w odniesieniu do połykania, żucia, artykulacji i oddychania.
+Docisk dna jamy ustnej | Jak wykonać: Przy uniesionej masie języka wykonać badanie palpacyjne dna jamy ustnej. | Na co zwracamy uwagę: Napięcie, elastyczność, ruchomość tkanek, możliwość rozluźnienia, reakcja podczas unoszenia języka.
+Wycofanie masy języka – „ziewanie” | Jak wykonać: Pacjent szeroko otwiera usta i wykonuje ruch jak podczas ziewania. | Na co zwracamy uwagę: Możliwość wycofania masy języka, obecność wgłębienia, napięcie języka i dna jamy ustnej, symetria.
+Próba ze zgłębnikiem rowkowym / sondą | Jak wykonać: Za pomocą zgłębnika ocenić wędzidełko i jego przyczep. | Na co zwracamy uwagę: Miejsce przyczepu, długość, grubość, elastyczność, napięcie, zachowanie tkanek podczas unoszenia języka.
+Połykanie | Jak wykonać: Obserwować połykanie śliny, płynu i/lub pokarmu – zależnie od potrzeb diagnostycznych. | Na co zwracamy uwagę: Pozycja języka, praca żuchwy, szczelność warg, aktywność mięśni okolicy ust i brody, kompensacje, sposób wykonania połykania.
+Pułapka wodna | Jak wykonać: Przyssać język do podniebienia, pobrać niewielką ilość wody i wykonać połykanie. | Na co zwracamy uwagę: Utrzymanie pozycji języka, podciśnienie, szczelność, praca mediodorsum, kontrola płynu, kompensacje.
+Żucie | Jak wykonać: Obserwować żucie pokarmu wymagającego obróbki po obu stronach jamy ustnej. | Na co zwracamy uwagę: Ruchy lateralne języka, żucie obustronne, trajektoria „łezki”, miażdżenie vs żucie, otwarta szpara warg, głośne żucie, kompensacje żuchwy.

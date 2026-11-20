@@ -1,124 +1,67 @@
-# Domyślny szablon wywiadu logopedycznego (formularz pierwszej konsultacji dziecka).
+# Domyślny szablon: „Uniwersalny wywiad i badanie logopedyczne” (dziecko / osoba dorosła).
 # Jedno pytanie w wierszu; wiersz zaczynający się od „## ” to nagłówek sekcji.
 # Wiersze zaczynające się od pojedynczego „# ” (z odstępem) oraz puste – pomijane.
+# Format pytania: Tytuł | Etykieta: podpowiedź | … – podpowiedzi wyświetlane pod tytułem (do LLM trafia tytuł).
+# Segment „@pozycje” = odpowiedź w trzech polach: nagłos / śródgłos / wygłos (artykulacja).
 # Administrator może nadpisać szablon w panelu (/admin → Szablon wywiadu).
 
-## 1. Powód zgłoszenia
-Osoba zgłaszająca / relacja z dzieckiem
-Co niepokoi Państwa w mowie, komunikacji lub zachowaniu dziecka? (główny powód konsultacji)
+## A. Wywiad ogólny
+Powód wizyty / główny problem | Co oceniamy: Powód zgłoszenia, główna trudność, od kiedy występuje, kto ją zauważył.
+Choroby i stan zdrowia | Co oceniamy: Choroby przewlekłe, przebyte choroby, operacje, urazy, hospitalizacje, leki, alergie.
+Opieka specjalistów | Co oceniamy: Specjaliści, z którymi pacjent jest/był konsultowany, rozpoznania, zalecenia.
+Ciąża i poród | Co oceniamy: Przebieg ciąży, komplikacje, termin i sposób porodu, tydzień ciąży, masa urodzeniowa, komplikacje okołoporodowe.
+Rozwój psychoruchowy | Co oceniamy: Kamienie milowe rozwoju, rozwój ruchowy, ewentualne opóźnienia lub nieprawidłowości.
+Karmienie niemowlęce | Co oceniamy: Pierś/butelka, uchwycenie, męczliwość, ulewanie, krztuszenie, trudności z karmieniem, przybieranie na wadze.
+Rozszerzanie diety | Co oceniamy: Wprowadzanie pokarmów, reakcja na konsystencje, trudności z gryzieniem, żuciem i połykaniem.
+Sposób jedzenia i preferencje | Co oceniamy: Tempo jedzenia, dokładność rozdrabniania, jedzenie jedno-/obustronne, preferowana strona, preferencje pokarmowe.
+Problemy podczas jedzenia | Co oceniamy: Popijanie, krztuszenie, kaszel, zaleganie pokarmu, duże kęsy, trudności z formowaniem kęsa, zaparcia.
+Słuch i reakcje słuchowe | Co oceniamy: Wyniki badań słuchu, infekcje uszu, niedosłuch, reakcje na dźwięki, nadwrażliwość.
+Rozwój mowy i komunikacji | Co oceniamy: Rozwój mowy, pierwsze słowa, rozumienie, komunikacja, zasób słownictwa, wcześniejsze trudności.
+Bóle głowy, szyi, barków | Co oceniamy: Lokalizacja, częstotliwość, napięcie, związek z żuciem, pozycją ciała lub napięciem mięśniowym.
+Sen i chrapanie | Co oceniamy: Jakość snu, chrapanie, oddychanie przez usta, wybudzenia, suchość jamy ustnej.
+Parafunkcje | Co oceniamy: Zaciskanie/zgrzytanie zębami, obgryzanie paznokci, gryzienie przedmiotów, ssanie palca, przygryzanie warg/policzków.
+Odruch wymiotny / wrażliwość | Co oceniamy: Nasilenie, miejsce wywołania, reakcja na dotyk, konsystencję, temperaturę i bodźce w jamie ustnej.
 
-## 2. Przebieg ciąży i porodu
-Jak przebiegała ciąża? Czy występowały infekcje? Przyjmowane leki?
-W którym tygodniu odbył się poród? (poród o czasie / wcześniactwo – tydzień)
-Jaki był rodzaj porodu? (siłami natury / cesarskie cięcie planowane / cesarskie cięcie nagłe)
-Jaki był stan dziecka po urodzeniu? (Apgar, masa urodzeniowa, niedotlenienie, inkubator itp.)
+## B. Pozycja spoczynkowa i oddech
+Pozycja spoczynkowa języka | Co oceniamy: Pozycja języka, apeksu i mediodorsum, kontakt z podniebieniem, szerokość języka, pozycja żuchwy i warg.
+Tor oddechowy | Co oceniamy: Nosowy/ustny/mieszany, drożność nosa, pozycja ust, oddychanie w dzień i podczas snu.
 
-## 3. Rozwój psychoruchowy i somatyczny
-Kiedy dziecko zaczęło stabilnie siedzieć?
-Kiedy zaczęło samodzielnie chodzić?
-Czy dziecko raczkowało? Jeśli tak, jak długo?
-Jak wygląda ogólna sprawność ruchowa? Czy dziecko często się potyka lub ma trudności z czynnościami precyzyjnymi?
-Dla starszych dzieci: czy występują trudności z koordynacją, sprawnością manualną, grafomotoryką lub wykonywaniem sekwencji ruchowych?
-Czy dziecko często choruje, szczególnie na infekcje górnych dróg oddechowych lub zapalenia uszu?
-Dla starszych dzieci: czy występuje przewlekły katar, zatkany nos, chrapanie lub oddychanie przez usta?
-Czy stwierdzono inne schorzenia, alergie lub zaburzenia, np. napięcia mięśniowego?
+## C. Budowa i sprawność aparatu artykulacyjnego
+Wędzidełko języka | Co oceniamy: Przyczep, długość, grubość, elastyczność, napięcie, wygląd podczas unoszenia języka.
+Język – budowa | Co oceniamy: Wielkość, szerokość, kształt, symetria, nalot, dwudzielność apeksu, wygląd grzbietu języka.
+Język – ruchomość i sprawność | Co oceniamy: Pionizacja, protruzja, retrakcja, lateralizacja, szybkość, precyzja, siła, wytrzymałość, niezależność od żuchwy.
+Wargi | Co oceniamy: Budowa, symetria, napięcie, domknięcie, protruzja, siła i ruchomość.
+Policzki | Co oceniamy: Napięcie, symetria, ruchomość, możliwość utrzymania napięcia i kontroli pokarmu/powietrza.
+Podniebienie twarde | Co oceniamy: Kształt, szerokość, wysokość, wysklepienie, asymetria.
+Podniebienie miękkie i języczek | Co oceniamy: Ruchomość, symetria, unoszenie, reakcja podczas fonacji i połykania.
+Zgryz | Co oceniamy: Rodzaj zgryzu, relacja łuków zębowych, szpara międzyzębowa, zgryz otwarty/głęboki/krzyżowy.
+Migdałki podniebienne | Co oceniamy: Wielkość, symetria, widoczność, możliwy wpływ na oddychanie i połykanie.
 
-## 4. Karmienie oraz funkcje gryzienia i połykania
-Jak dziecko było karmione w niemowlęctwie? (pierś / butelka / inne) Jak długo?
-Jak przebiegało rozszerzanie diety? Czy występowało krztuszenie lub nasilony odruch wymiotny?
-Jak dziecko radzi sobie obecnie z pokarmami stałymi? Czy chętnie gryzie i żuje twardsze pokarmy?
-Dla starszych dzieci: czy występują trudności z gryzieniem, żuciem, połykaniem lub określonymi konsystencjami pokarmów?
-Czy występuje nadmierne ślinienie się?
-Jak dziecko pije? (kubek otwarty / bidon ze słomką / butelka z dzióbkiem / kubek niekapek / inne)
-Czy dziecko ssie palec, smoczek lub stale trzyma w buzi kocyk albo zabawki?
-Czy występują zaparcia, połykanie zbyt dużych kęsów bez odpowiedniej obróbki pokarmowej?
-Czy jest potrzeba popijania podczas jedzenia, np. w celu ułatwienia rozdrobnienia lub połknięcia pokarmu?
-Czy występuje wzmożony odruch wymiotny, np. podczas jedzenia, mycia zębów lub kontaktu z określonymi pokarmami?
+## D. Żuchwa
+Pozycja żuchwy | Co oceniamy: Pozycja spoczynkowa, relacja z językiem i wargami.
+Ruchomość i stabilizacja żuchwy | Co oceniamy: Zakres otwierania/zamykania, ruchy boczne, protruzja, retruzja, stabilizacja.
+Kierunek ruchu żuchwy | Co oceniamy: Tor otwierania i zamykania, symetria, odchylenie, płynność ruchu.
+Dysocjacja języka i żuchwy | Co oceniamy: Możliwość wykonywania ruchów języka niezależnie od żuchwy, kompensacyjne ruchy żuchwy.
 
-## 5. Słuch i reakcje słuchowe
-Czy wykonano przesiewowe badanie słuchu w szpitalu? Jaki był wynik?
-Czy dziecko reaguje na swoje imię?
-Czy rozumie proste polecenia poparte gestem, np. „daj misia”, „chodź tu”?
-Czy rozumie proste polecenia bez gestu?
-Dla starszych dzieci: czy dziecko rozumie dłuższe i bardziej złożone polecenia, np. składające się z 2–3 etapów?
+## E. Połykanie
+Połykanie | Co oceniamy: Pozycja języka, żuchwy i warg, aktywność mięśni okolicy ust i brody, kompensacje, pozycja apeksu, tworzenie podciśnienia.
 
-## 6. Rozwój mowy i komunikacji
-Czy dziecko głużyło i gaworzyło w 1. roku życia? (np. ba-ba, ma-ma)
-Ile słów, również uproszczonych, dziecko obecnie świadomie wypowiada?
-Czy dziecko łączy dwa wyrazy? Jeśli tak, proszę podać przykład.
-W jaki sposób dziecko komunikuje, że czegoś chce? (słowa / gesty / wskazywanie / płacz / krzyk / prowadzenie dorosłego / inne)
-Czy dziecko naśladuje dźwięki z otoczenia, np. odgłosy zwierząt lub pojazdów?
-Czy dziecko komunikuje się pojedynczymi wyrazami czy zdaniami?
-Dla starszych dzieci: czy dziecko potrafi powtórzyć dłuższe wyrazy i zdania oraz zachować ich kolejność?
-Dla starszych dzieci: czy występują trudności z budowaniem zdań, odmianą wyrazów, doborem słów lub opowiadaniem?
-Dla starszych dzieci: czy dziecko wypowiada się pełnymi zdaniami i potrafi samodzielnie opowiedzieć o wydarzeniu, obrazku lub historii?
+## F. Gryzienie i żucie
+Gryzienie | Co oceniamy: Odgryzanie, udział siekaczy, stabilizacja żuchwy, siła zgryzu.
+Żucie | Co oceniamy: Jedno-/obustronne, ruchy lateralne, trajektoria ruchu, tempo, dokładność rozdrabniania.
+Praca języka podczas żucia | Co oceniamy: Przenoszenie pokarmu na boki, formowanie kęsa, oczyszczanie jamy ustnej, transport pokarmu.
+Sposób żucia | Co oceniamy: Przewaga miażdżenia nad żuciem, żucie głośne, otwarta szpara warg, preferencja jednej strony.
 
-## 7. Kontakt społeczny, zabawa i zachowanie
-Czy dziecko nawiązuje kontakt wzrokowy podczas rozmowy i zabawy?
-Czy używa gestu wskazywania palcem, aby coś pokazać i dzielić uwagę z dorosłym?
-Jak wygląda zabawa? Czy dziecko bawi się funkcjonalnie (jeździ autkiem, karmi misia), czy raczej układa przedmioty w rzędy / kręci kółkami?
-Czy dziecko chętnie bawi się z dorosłymi i interesuje się innymi dziećmi?
-Dla starszych dzieci: jak dziecko funkcjonuje w relacjach z rówieśnikami? Czy łatwo nawiązuje rozmowę, podtrzymuje temat i rozumie zasady rozmowy?
-
-## 8. Środowisko i stymulacja rozwoju
-W jakim języku lub językach mówi się w domu? Czy dziecko jest dwujęzyczne?
-Dla starszych dzieci: w jakich językach dziecko komunikuje się na co dzień i czy poziom swobody wypowiedzi różni się między językami?
-Ile czasu dziennie dziecko spędza przed ekranami? (telewizor / telefon / tablet / zabawki z ekranem)
-Czy telewizor lub bajki są włączone w tle podczas innych aktywności dziecka?
-
-## Pytania dodatkowe przed pierwszą wizytą – szczególnie u młodszych dzieci
-Czy dwulatek posługuje się gestem wskazywania palcem?
-Ile słów lub dźwięków naśladowczych dziecko wypowiada obecnie?
-Czy zauważają Państwo trudności z odgryzaniem lub żuciem pokarmów?
-
-## 9A. Badanie: budowa i sprawność aparatu artykulacyjnego
-Wędzidełko podjęzykowe – budowa (prawidłowe / skrócone lekkie / skrócone umiarkowane / skrócone znaczne / inny typ, ankyloglosja)
-Ruchomość języka – czy język unosi się do wałka dziąsłowego?
-Ruchomość języka – czy przy wysuwaniu na brodę tworzy się sercowate wcięcie?
-Ruchomość języka – czy występuje pociąganie dna jamy ustnej?
-Wędzidełko wargi górnej (prawidłowe / przerosłe / ogranicza ruchomość wargi)
-Podniebienie (prawidłowo wysklepione / wysokie, wąskie – gotyckie / podejrzenie rozszczepu – widoczny lub podśluzówkowy)
-Zgryz i uzębienie (uzębienie mleczne kompletne / niekompletne / zgryz otwarty / tyłozgryz / przodozgryz / inne)
-Migdałki podniebienne (w normie / powiększone)
-
-## 9B. Badanie: pozycja spoczynkowa
-Wargi (zwarte / stale półotwarte / otwarte – podejrzenie oddychania przez usta)
-Język (spoczywa na podniebieniu / leży na dnie jamy ustnej / napiera na dolne zęby / wsuwany między zęby)
-Tor oddechowy (nosowy / ustny / mieszany)
-
-## 9C. Badanie: funkcje prymarne
-Połykanie (prawidłowe, dojrzałe / nieprawidłowe, infantylne) – obserwacje
-Gryzienie i żucie – ruchy żuchwy (pionowe / rotacyjne / mieszane)
-Gryzienie i żucie – strona żucia (obustronne / głównie prawa / głównie lewa) – obserwacje
-
-## 9D. Badanie: podniebienie miękkie i języczek
-Budowa języczka (prawidłowy / skrócony / wydłużony / rozszczepiony – uvula bifida)
-Ruchomość podniebienia miękkiego (prawidłowa i symetryczna / ograniczona, leniwa / asymetryczna) – obserwacje
-Rezonans (brak nosowania / nosowanie otwarte / nosowanie zamknięte)
-
-## 9E. Badanie: wrażliwość i odruchy
-Odruch wymiotny (prawidłowy / wzmożony, hiperwrażliwość / osłabiony, zniesiony) – obserwacje
-
-## 9F. Badanie: żuchwa – pozycja, ruchomość i stabilizacja
-Pozycja spoczynkowa / budowa żuchwy (prawidłowa / retrogenia / progenia / asymetria)
-Zakres otwierania ust (prawidłowy / ograniczony)
-Kierunek ruchu przy otwieraniu i zamykaniu (płynny, prosty / zbaczanie w bok / ruch esowaty, zygzakowaty)
-Ruchy boczne żuchwy (obecne / ograniczone w prawo / ograniczone w lewo / brak, znaczne ograniczenie)
-Stabilizacja żuchwy (prawidłowa / niewystarczająca)
-Dysocjacja języka i żuchwy (obecna, rozwijająca się adekwatnie do wieku / brak, wyraźnie ograniczona) – obserwacje
-Praca żuchwy podczas odgryzania i żucia (pionowa / rotacyjna, okrężna / mieszana) – obserwacje
-Praca żuchwy podczas mowy / wokalizacji (adekwatna / zbyt szeroka / nadmierne „kłapanie”) – obserwacje
-
-## 9G. Badanie: artykulacja i realizacja dźwięków
-Obserwacje / próby artykulacyjne
-
-## 10. Podsumowanie badania
-Najważniejsze obserwacje
-Wstępne wnioski funkcjonalne
-Obszary wymagające dalszej diagnostyki / konsultacji
-Priorytety terapeutyczne
-
-## 11. Dalsze zalecenia
-Zalecenia do pracy w domu
-Zalecane konsultacje / badania dodatkowe
-Termin kolejnej wizyty
+## G. Wrażliwość, odruchy i artykulacja
+Artykulacja – samogłoski | Głoski: a, e, i, o, u, y | @pozycje
+Artykulacja – p, b, m | Głoski: p, b, m | @pozycje
+Artykulacja – t, d, n | Głoski: t, d, n | @pozycje
+Artykulacja – k, g | Głoski: k, g | @pozycje
+Artykulacja – szereg ciszący | Głoski: ś, ź, ć, dź | @pozycje
+Artykulacja – szereg syczący | Głoski: s, z, c, dz | @pozycje
+Artykulacja – szereg szumiący | Głoski: sz, ż, cz, dż | @pozycje
+Artykulacja – r | Głoski: r | @pozycje
+Artykulacja – pozostałe głoski | Głoski: f, w, ł, j, ch/h | @pozycje
+Wrażliwość jamy ustnej | Co oceniamy: Reakcja na dotyk, temperaturę, konsystencję i bodźce w obrębie języka, warg, policzków i podniebienia.
+Odruch wymiotny | Co oceniamy: Miejsce wywołania, siła reakcji, symetria, nadwrażliwość, wpływ na badanie i jedzenie.
+Kompensacje artykulacyjne | Co oceniamy: Ruchy żuchwy, warg lub innych struktur zastępujące ograniczony ruch języka.

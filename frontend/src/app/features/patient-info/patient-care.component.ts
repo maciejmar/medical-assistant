@@ -5,7 +5,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { PatientsService } from '../../core/patients.service';
 import { PatientAccount, PatientNotification, Recommendation } from '../../shared/models';
 import { emptyToNull } from '../../shared/utils';
-import { PatientInterviewComponent } from './patient-interview.component';
+import { PatientExamsComponent } from './patient-exams.component';
 import { PatientPlanComponent } from './patient-plan.component';
 import { PatientCalendarComponent } from '../../shared/patient-calendar.component';
 
@@ -20,7 +20,7 @@ function apiError(err: unknown, fallback: string): string {
 @Component({
   selector: 'app-patient-care',
   standalone: true,
-  imports: [ReactiveFormsModule, DatePipe, PatientInterviewComponent, PatientPlanComponent, PatientCalendarComponent],
+  imports: [ReactiveFormsModule, DatePipe, PatientExamsComponent, PatientPlanComponent, PatientCalendarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mt-6 grid gap-6 lg:grid-cols-2">
@@ -98,7 +98,7 @@ function apiError(err: unknown, fallback: string): string {
       </section>
     </div>
 
-    <app-patient-interview [patientId]="patientId" />
+    <app-patient-exams [patientId]="patientId" />
 
     <app-patient-plan [patientId]="patientId" />
 

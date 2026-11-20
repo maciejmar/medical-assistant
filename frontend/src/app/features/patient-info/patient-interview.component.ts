@@ -11,7 +11,19 @@ import {
   signal,
 } from '@angular/core';
 import { AudioRecordingService } from '../../core/audio-recording.service';
-import { Interview, InterviewEntry, InterviewItem, InterviewService } from '../../core/interview.service';
+import {
+  Interview,
+  InterviewEntry,
+  InterviewForm,
+  InterviewItem,
+  InterviewService,
+  POSITION_LABELS,
+  ParsedQuestion,
+  Positions,
+  formatPositions,
+  parsePositions,
+  parseQuestion,
+} from '../../core/interview.service';
 import { IconComponent } from '../../shared/icon.component';
 
 const SECTION_PREFIX = '## ';
@@ -20,6 +32,26 @@ const SECTION_PREFIX = '## ';
 export function isSectionQuestion(question: string): boolean {
   return question.startsWith(SECTION_PREFIX);
 }
+
+/** Teksty zależne od formularza. */
+export const FORM_TEXT: Record<InterviewForm, { title: string; intro: string; question: string; answer: string; placeholder: string; empty: string }> = {
+  interview: {
+    title: 'Uniwersalny wywiad i badanie logopedyczne',
+    intro: 'Dziecko / osoba dorosła. Pod każdym punktem – co oceniamy; przy artykulacji wpisz wynik w nagłosie, śródgłosie i wygłosie.',
+    question: 'Obszar / co oceniamy',
+    answer: 'Wynik',
+    placeholder: 'Odpowiedź / wynik badania',
+    empty: 'Własne pytanie do tego pacjenta',
+  },
+  ankyloglossia: {
+    title: 'Karta badania – diagnoza ankyloglosji',
+    intro: 'Przy każdej próbie: jak ją wykonać i na co zwracać uwagę. Wynik wpisz albo podyktuj mikrofonem.',
+    question: 'Próba',
+    answer: 'Wynik',
+    placeholder: 'Wynik próby',
+    empty: 'Własna próba do tego pacjenta',
+  },
+};
 
 function apiError(err: unknown, fallback: string): string {
   if (err instanceof HttpErrorResponse && typeof err.error?.detail === 'string') {
@@ -50,9 +82,9 @@ export function mergeTranscript(answer: string, transcript: string): string {
   imports: [DatePipe, IconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="card mt-6" aria-labelledby="interview-heading">
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 id="interview-heading" class="font-semibold">Wywiad pacjenta</h2>
+    <section class="card" [attr.aria-labelledby]="'interview-heading-' + form">
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 [id]="'interview-heading-' + form" class="font-semibold">{{ text.title }}</h2>
         @if (interview(); as iv) {
           @if (dirty()) {
             <span class="badge bg-amber-100 text-amber-800">Niezapisane zmiany</span>
@@ -65,9 +97,10 @@ export function mergeTranscript(answer: string, transcript: string): string {
           }
         }
       </div>
+      <p class="mb-1 text-sm text-slate-600">{{ text.intro }}</p>
       <p class="mb-4 text-xs text-slate-500">
         Odpowiedź wpisz albo nagraj mikrofonem – nagranie zostaje zapisane przy pytaniu (przycisk głośnika odtwarza je), a transkrypcja trafia
-        do pola odpowiedzi do poprawienia. Asystent uwzględnia wyłącznie <strong>zatwierdzoną</strong> wersję wywiadu.
+        do pola odpowiedzi do poprawienia. Asystent uwzględnia wyłącznie <strong>zatwierdzoną</strong> wersję.
       </p>
 
       @if (error(); as e) {
@@ -84,8 +117,8 @@ export function mergeTranscript(answer: string, transcript: string): string {
           <table class="w-full text-sm">
             <thead class="hidden bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 md:table-header-group">
               <tr>
-                <th scope="col" class="w-2/5 px-3 py-2">Pytanie</th>
-                <th scope="col" class="px-3 py-2">Odpowiedź</th>
+                <th scope="col" class="w-1/2 px-3 py-2">{{ text.question }}</th>
+                <th scope="col" class="px-3 py-2">{{ text.answer }}</th>
               </tr>
             </thead>
             <tbody>
@@ -102,7 +135,15 @@ export function mergeTranscript(answer: string, transcript: string): string {
                 } @else {
                 <tr class="block border-t border-slate-200 first:border-t-0 md:table-row">
                   <td class="block px-3 pb-1 pt-3 align-top md:table-cell md:py-3">
-                    <p class="font-medium text-slate-800">{{ number(item) }}. {{ item.question }}</p>
+                    <p class="font-medium text-slate-800">{{ number(item) }}. {{ parsed(item).title }}</p>
+                    @for (hint of parsed(item).hints; track $index) {
+                      <p class="mt-1 text-xs leading-snug text-slate-500">
+                        @if (hint.label) {
+                          <span class="font-semibold uppercase tracking-wide text-slate-400">{{ hint.label }}:</span>
+                        }
+                        {{ hint.text }}
+                      </p>
+                    }
                     <div class="mt-2 flex flex-wrap items-center gap-1.5">
                       @if (recordingId() === item.id) {
                         <button type="button" class="inline-flex h-8 items-center gap-1.5 rounded-full bg-red-600 pl-2.5 pr-3 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700" (click)="stopRecording(item)" [attr.aria-label]="'Zakończ nagrywanie odpowiedzi na pytanie ' + number(item)" title="Zakończ nagrywanie">
@@ -134,14 +175,30 @@ export function mergeTranscript(answer: string, transcript: string): string {
                     </div>
                   </td>
                   <td class="block px-3 pb-3 pt-1 md:table-cell md:py-3">
-                    <textarea
-                      rows="3"
-                      class="field w-full"
-                      [value]="item.answer"
-                      (input)="setAnswer(item.id, $any($event.target).value)"
-                      [attr.aria-label]="'Odpowiedź na pytanie ' + number(item)"
-                      placeholder="Odpowiedź pacjenta / opiekuna"
-                    ></textarea>
+                    @if (parsed(item).positions) {
+                      <div class="grid gap-2 sm:grid-cols-3">
+                        @for (label of positionLabels; track label; let i = $index) {
+                          <label class="block text-xs font-medium text-slate-500">
+                            {{ label }}
+                            <input
+                              class="field mt-1 w-full"
+                              [value]="positions(item)[i]"
+                              (input)="setPosition(item, i, $any($event.target).value)"
+                              [attr.aria-label]="label + ' – pytanie ' + number(item)"
+                            />
+                          </label>
+                        }
+                      </div>
+                    } @else {
+                      <textarea
+                        rows="3"
+                        class="field w-full"
+                        [value]="item.answer"
+                        (input)="setAnswer(item.id, $any($event.target).value)"
+                        [attr.aria-label]="'Odpowiedź na pytanie ' + number(item)"
+                        [placeholder]="text.placeholder"
+                      ></textarea>
+                    }
                   </td>
                 </tr>
                 }
@@ -155,7 +212,7 @@ export function mergeTranscript(answer: string, transcript: string): string {
             class="field flex-1"
             [value]="newQuestion()"
             (input)="newQuestion.set($any($event.target).value)"
-            placeholder="Własne pytanie do tego pacjenta"
+            [placeholder]="text.empty"
             aria-label="Treść nowego pytania"
             maxlength="2000"
           />
@@ -176,6 +233,7 @@ export function mergeTranscript(answer: string, transcript: string): string {
 })
 export class PatientInterviewComponent implements OnInit, OnDestroy {
   @Input({ required: true }) patientId!: number;
+  @Input() form: InterviewForm = 'interview';
 
   private readonly api = inject(InterviewService);
   protected readonly recorder = inject(AudioRecordingService);
@@ -197,11 +255,35 @@ export class PatientInterviewComponent implements OnInit, OnDestroy {
     return this.rows().some((row) => saved.get(row.id) !== row.answer.trim());
   });
 
+  protected readonly positionLabels = POSITION_LABELS;
+
+  protected get text() {
+    return FORM_TEXT[this.form];
+  }
+
+  /** Rozbiór pytań (tytuł, podpowiedzi, trzy pola artykulacji) – liczony raz na zmianę listy. */
+  private readonly parsedById = computed(() => new Map(this.rows().map((r) => [r.id, parseQuestion(r.question)])));
+
+  protected parsed(item: InterviewItem): ParsedQuestion {
+    return this.parsedById().get(item.id) ?? parseQuestion(item.question);
+  }
+
+  protected positions(item: InterviewItem): Positions {
+    return parsePositions(item.answer);
+  }
+
+  protected setPosition(item: InterviewItem, index: number, value: string): void {
+    const current = this.rows().find((r) => r.id === item.id)?.answer ?? '';
+    const values = parsePositions(current);
+    values[index] = value;
+    this.setAnswer(item.id, formatPositions(values));
+  }
+
   private audio: HTMLAudioElement | null = null;
   private audioUrl: string | null = null;
 
   ngOnInit(): void {
-    this.api.get(this.patientId).subscribe({
+    this.api.get(this.patientId, this.form).subscribe({
       next: (interview) => {
         this.apply(interview);
         this.loading.set(false);
@@ -253,7 +335,7 @@ export class PatientInterviewComponent implements OnInit, OnDestroy {
       return;
     }
     this.stopPlayback();
-    this.submit(this.api.reset(this.patientId), 'Wczytano aktualny szablon pytań.');
+    this.submit(this.api.reset(this.patientId, this.form), 'Wczytano aktualny szablon pytań.');
   }
 
   protected setAnswer(id: number, answer: string): void {
@@ -262,13 +344,13 @@ export class PatientInterviewComponent implements OnInit, OnDestroy {
   }
 
   protected save(): void {
-    this.submit(this.api.save(this.patientId, this.entries()), 'Zapisano szkic wywiadu.');
+    this.submit(this.api.save(this.patientId, this.entries(), this.form), 'Zapisano szkic.');
   }
 
   protected approve(): void {
     this.submit(
-      this.api.approve(this.patientId, this.entries()),
-      'Wywiad zatwierdzony – asystent uwzględni go w odpowiedziach o tym pacjencie.',
+      this.api.approve(this.patientId, this.entries(), this.form),
+      'Zatwierdzono – asystent uwzględni tę wersję w odpowiedziach o tym pacjencie.',
     );
   }
 
@@ -278,7 +360,7 @@ export class PatientInterviewComponent implements OnInit, OnDestroy {
       return;
     }
     this.busy.set(true);
-    this.api.addQuestion(this.patientId, question).subscribe({
+    this.api.addQuestion(this.patientId, question, this.form).subscribe({
       next: (item) => {
         this.busy.set(false);
         this.newQuestion.set('');
@@ -293,7 +375,7 @@ export class PatientInterviewComponent implements OnInit, OnDestroy {
   }
 
   protected removeQuestion(item: InterviewItem): void {
-    if (!confirm(`Usunąć pytanie „${item.question}” wraz z odpowiedzią i nagraniem?`)) {
+    if (!confirm(`Usunąć pytanie „${this.parsed(item).title}” wraz z odpowiedzią i nagraniem?`)) {
       return;
     }
     if (this.playingId() === item.id) {

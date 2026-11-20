@@ -2,7 +2,15 @@ from sqlmodel import select
 
 from src.api import chat as chat_module
 from src.api import interview as interview_module
-from src.database import InterviewAudio, InterviewItem, PatientInterview, Role, session_factory
+from src.database import (
+    InterviewAudio,
+    InterviewItem,
+    InterviewItemForm,
+    PatientInterview,
+    PatientInterviewForm,
+    Role,
+    session_factory,
+)
 from src.stt import TranscriptionError
 
 from .test_chat import FakeGraph
@@ -62,7 +70,7 @@ async def test_approval_snapshot_feeds_llm_context(client, make_headers, monkeyp
 
     approved = await client.post(
         f"/api/patients/{pid}/interview/approve",
-        json=_payload(items, a2="Nie wymawia głoski r", a10="Chodzenie w 11. miesiącu"),
+        json=_payload(items, a2="Nie wymawia głoski r", a17="Język na dnie jamy ustnej"),
         headers=doctor,
     )
     assert approved.status_code == 200
@@ -71,13 +79,15 @@ async def test_approval_snapshot_feeds_llm_context(client, make_headers, monkeyp
     await client.post("/api/chat", json={"message": "Co dalej?", "patient_id": pid}, headers=doctor)
     context = fake.states[-1]["patient_context"]
     assert "Wywiad z pacjentem" in context
-    assert f"- {items[2]['question']}\n  Odpowiedź: Nie wymawia głoski r" in context
-    assert "Chodzenie w 11. miesiącu" in context
+    # Do LLM trafia sam tytuł pytania – bez podpowiedzi „| Co oceniamy: …”.
+    assert "- Choroby i stan zdrowia\n  Odpowiedź: Nie wymawia głoski r" in context
+    assert "Co oceniamy" not in context
+    assert "Język na dnie jamy ustnej" in context
     # Nagłówki sekcji tylko dla sekcji z odpowiedziami.
-    assert "[1. Powód zgłoszenia]" in context
-    assert "[3. Rozwój psychoruchowy i somatyczny]" in context
-    assert "Przebieg ciąży" not in context
-    assert items[1]["question"] not in context, "pytania bez odpowiedzi są pomijane"
+    assert "[A. Wywiad ogólny]" in context
+    assert "[B. Pozycja spoczynkowa i oddech]" in context
+    assert "[C. Budowa" not in context
+    assert "Powód wizyty" not in context, "pytania bez odpowiedzi są pomijane"
 
     # Poprawka po zatwierdzeniu: status wraca do szkicu, LLM widzi nadal zatwierdzoną wersję.
     edited = (await client.get(f"/api/patients/{pid}/interview", headers=doctor)).json()["items"]
@@ -222,11 +232,15 @@ async def test_deleting_patient_removes_interview(client, make_headers, monkeypa
 def test_default_template_comes_from_form_with_sections():
     questions = interview_module.DEFAULT_QUESTIONS
     sections = [q for q in questions if interview_module.is_section(q)]
-    assert questions[0] == "## 1. Powód zgłoszenia"
-    assert "## 9A. Badanie: budowa i sprawność aparatu artykulacyjnego" in sections
-    assert questions[-1] == "Termin kolejnej wizyty"
+    assert questions[0] == "## A. Wywiad ogólny"
+    assert "## G. Wrażliwość, odruchy i artykulacja" in sections
+    assert len(sections) == 7 and len(questions) - len(sections) == 47
+    assert questions[-1].startswith("Kompensacje artykulacyjne | Co oceniamy:")
+    assert "Artykulacja – szereg syczący | Głoski: s, z, c, dz | @pozycje" in questions
     assert not any(q.startswith("# ") and not q.startswith("## ") for q in questions)
-    assert len(questions) - len(sections) > 80
+    ankylo = interview_module.DEFAULTS["ankyloglossia"]
+    assert len(ankylo) == 12 and ankylo[1].startswith("Lingual Palatal Suction | Jak wykonać:")
+    assert interview_module.question_title(ankylo[1]) == "Lingual Palatal Suction"
 
 
 async def test_reset_replaces_questions_with_current_template(client, make_headers, monkeypatch):
@@ -262,3 +276,73 @@ async def test_reset_replaces_questions_with_current_template(client, make_heade
     assert (
         await client.post(f"/api/patients/{pid}/interview/reset", headers=other)
     ).status_code == 404
+
+
+async def test_ankyloglossia_form_is_separate_and_feeds_llm(client, make_headers, monkeypatch):
+    fake = FakeGraph()
+    monkeypatch.setattr(chat_module, "rag_graph", fake)
+    doctor = await make_headers("doc@example.com")
+    pid = await _patient(client, doctor)
+    base = f"/api/patients/{pid}/interview"
+    interview = (await client.get(base, headers=doctor)).json()["items"]
+    exam = (await client.get(f"{base}?form=ankyloglossia", headers=doctor)).json()
+    assert len(exam["items"]) == 12 and exam["status"] == "draft"
+    assert {i["id"] for i in exam["items"]}.isdisjoint({i["id"] for i in interview})
+    # Ponowne otwarcie nie zakłada formularza drugi raz; wywiad ma nadal swoje pytania.
+    again = (await client.get(f"{base}?form=ankyloglossia", headers=doctor)).json()["items"]
+    assert [i["id"] for i in again] == [i["id"] for i in exam["items"]]
+    assert len((await client.get(base, headers=doctor)).json()["items"]) == len(interview)
+
+    # Pytania jednego formularza nie zapiszą się przez drugi.
+    wrong = await client.put(base, json=_payload(exam["items"]), headers=doctor)
+    assert wrong.status_code == 404
+
+    added = await client.post(
+        f"{base}/items?form=ankyloglossia", json={"question": "Próba własna"}, headers=doctor
+    )
+    assert added.status_code == 201
+    items = (await client.get(f"{base}?form=ankyloglossia", headers=doctor)).json()["items"]
+    assert items[-1]["question"] == "Próba własna" and len(items) == 13
+
+    approved = await client.post(
+        f"{base}/approve?form=ankyloglossia",
+        json=_payload(items, a3="Efekt struny, wysunięcie ograniczone"),
+        headers=doctor,
+    )
+    assert approved.json()["status"] == "approved"
+    assert (await client.get(base, headers=doctor)).json()["status"] == "draft"
+
+    await client.post("/api/chat", json={"message": "Co dalej?", "patient_id": pid}, headers=doctor)
+    context = fake.states[-1]["patient_context"]
+    assert "[Karta badania – diagnoza ankyloglosji]" in context
+    assert "- Wysuwanie języka\n  Odpowiedź: Efekt struny, wysunięcie ograniczone" in context
+    assert "Jak wykonać" not in context
+
+    # Usunięcie pytania dotyczy jego formularza (zmiana po zatwierdzeniu → szkic).
+    removed = await client.delete(f"{base}/items/{items[-1]['id']}", headers=doctor)
+    assert removed.status_code == 204
+    exam = (await client.get(f"{base}?form=ankyloglossia", headers=doctor)).json()
+    assert len(exam["items"]) == 12 and exam["status"] == "draft"
+
+    reset = await client.post(f"{base}/reset?form=ankyloglossia", headers=doctor)
+    assert len(reset.json()["items"]) == 12
+    assert len((await client.get(base, headers=doctor)).json()["items"]) == len(interview)
+
+    assert (await client.delete(f"/api/patients/{pid}", headers=doctor)).status_code == 204
+    async with session_factory() as session:
+        for model in (InterviewItemForm, PatientInterviewForm, InterviewItem):
+            assert (await session.exec(select(model))).all() == []
+
+
+async def test_ankyloglossia_template_is_editable_separately(client, make_headers):
+    admin = await make_headers("admin@example.com", Role.ADMIN)
+    url = "/api/admin/interview-template"
+    saved = await client.put(
+        f"{url}?form=ankyloglossia", json={"questions": ["Próba A", "Próba B"]}, headers=admin
+    )
+    assert saved.json()["questions"] == ["Próba A", "Próba B"]
+    assert (await client.get(url, headers=admin)).json()["is_default"] is True
+    reset = await client.delete(f"{url}?form=ankyloglossia", headers=admin)
+    assert len(reset.json()["questions"]) == 12
+    bad = await client.get(f"{url}?form=inne", headers=admin)
+    assert bad.status_code == 422

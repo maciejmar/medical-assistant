@@ -66,6 +66,8 @@ Nowe funkcje dodawaj **nowymi tabelami**, a nie kolumnami w istniejących (brak 
 | `interview_templates` | id=1 (jeden wiersz), questions (JSON – lista pytań, „## ” = nagłówek sekcji), updated_by, updated_at; brak wiersza = domyślny szablon z pliku `src/interview_template.txt` |
 | `patient_interviews` | patient_id (PK), user_id, status (`draft`/`approved`), approved_items (JSON – migawka [{question, answer}] z chwili zatwierdzenia), approved_at |
 | `patient_interview_items` | patient_id, position, question, answer, created_at, updated_at |
+| `patient_interview_item_forms` | item_id (PK → items), patient_id, form – pytanie dodatkowego formularza (np. `ankyloglossia`); brak wiersza = wywiad uniwersalny (`interview`) |
+| `patient_interview_forms` | patient_id + form (PK), user_id, status, approved_items, approved_at, created_at, updated_at – stan dodatkowego formularza (odpowiednik `patient_interviews`) |
 | `patient_interview_audio` | item_id (PK → items), patient_id, content_type, data (LargeBinary – nagranie w bazie, bez wolumenu), size |
 | `patient_plans` | patient_id (PK), include_in_context (bool, domyślnie false), updated_at |
 | `patient_plan_steps` | patient_id, position, title (≤200), description, status (`planned`/`completed`/`suspended`/`infeasible`), created_at, updated_at |
@@ -179,8 +181,19 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
   `cancel()` tylko gdy coś gra i nowy `speak()` po 150 ms, `resume()` przed startem, oczekiwanie na `voiceschanged`.
 - **Historia pacjenta** – zakładki „Sesje i notatki” oraz „Pytania do asystenta” (`GET /api/patients/{id}/chat-history`:
   wiadomości z `patient_id` pacjenta, łączone w pary pytanie–odpowiedź, link „Otwórz rozmowę”).
-- **Wywiad pacjenta** (komponent `patient-interview`, w `patient-care` przed „Zalecenia i wskazania do leczenia”):
-  tabela Pytanie | Odpowiedź. Przy pierwszym otwarciu (`GET /api/patients/{id}/interview`) wywiad jest zakładany
+- **Formularze pacjenta – przełącznik** (komponent `patient-exams`, w `patient-care` przed „Zalecenia i wskazania do
+  leczenia”): nad kartą segmentowy przełącznik (role tablist) „Wywiad” | „Diagnoza ankyloglosji” z przesuwaną białą
+  pigułką (transform 300 ms). Domyślnie wywiad. Zmiana: bieżąca karta dostaje `exam-leave` (260 ms: zanikanie, przesunięcie
+  w górę, scale 0.985, blur 6 px), po czym druga jest odsłaniana z `exam-enter` (420 ms, odwrotnie); `prefers-reduced-motion`
+  → 1 ms. Oba formularze zostają zamontowane (ukryty – `[hidden]`), więc przełączanie nie gubi niezapisanych zmian ani
+  nagrania; karta ankyloglosji jest montowana (i zakładana na serwerze) dopiero przy pierwszym wyborze.
+- **Formularz** (komponent `patient-interview`, `@Input form: 'interview' | 'ankyloglossia'`; teksty z `FORM_TEXT`):
+  tabela Obszar / co oceniamy (Próba) | Wynik. Pytanie w szablonie: `Tytuł | Etykieta: podpowiedź | … | @pozycje` –
+  `parseQuestion` (serwis): tytuł pogrubiony, podpowiedzi pod nim drobnym drukiem z etykietą wersalikami („CO OCENIAMY:”,
+  „JAK WYKONAĆ:”, „NA CO ZWRACAMY UWAGĘ:”); `@pozycje` → trzy pola Nagłos / Śródgłos / Wygłos zapisywane w odpowiedzi jako
+  wiersze „Nagłos: …
+Wygłos: …” (`formatPositions`/`parsePositions`; tekst bez etykiety, np. doklejona transkrypcja,
+  trafia do nagłosu). Wszystkie wywołania API z `?form=`. Przy pierwszym otwarciu (`GET /api/patients/{id}/interview`) wywiad jest zakładany
   z bieżącego szablonu (zmiana szablonu nie rusza istniejących wywiadów); lekarz dodaje własne pytania i usuwa zbędne.
   Przy pytaniu: ikona mikrofonu – nagranie odpowiedzi pacjenta w gabinecie (`AudioRecordingService` → `PUT …/items/{iid}/audio`) –
   serwer zapisuje nagranie (zastępuje poprzednie) i zwraca transkrypcję Whisper (`pl`), którą frontend **dokleja** do pola
@@ -188,14 +201,21 @@ zanonimizowaną. Treści systemowe (seed bazy wiedzy, `user_id=None`) nie są an
   ikona głośnika – odsłuch nagrania (w trakcie: pauza) (blob przez HttpClient z JWT → `Audio`), usuwanie nagrania. „Zapisz szkic” (`PUT …/interview`)
   i „Zatwierdź” (`POST …/interview/approve`) – zatwierdzenie zapisuje migawkę `approved_items`. Status `approved` tylko,
   gdy treść = migawka (poprawka po zatwierdzeniu → `draft`, cofnięcie → znów `approved`); znacznik „Niezapisane zmiany”.
-  Szablon domyślny: `backend/src/interview_template.txt` (formularz „Wywiad logopedyczny i ocena anatomiczno-funkcjonalna –
-  pierwsza konsultacja dziecka”, 11 sekcji + pytania dodatkowe, badanie 9A–9G, podsumowanie, zalecenia; ~90 pytań),
-  jedno pytanie w wierszu, `## ` = nagłówek sekcji, `# ` = komentarz; pola wyboru z formularza jako opcje w nawiasie
-  („(siłami natury / cesarskie cięcie planowane / …)”); imię, nazwisko i data urodzenia pominięte (są w karcie pacjenta).
+  Szablony domyślne: `backend/src/interview_template.txt` – „Uniwersalny wywiad i badanie logopedyczne” (dziecko / osoba
+  dorosła; sekcje A. Wywiad ogólny, B. Pozycja spoczynkowa i oddech, C. Budowa i sprawność aparatu artykulacyjnego,
+  D. Żuchwa, E. Połykanie, F. Gryzienie i żucie, G. Wrażliwość, odruchy i artykulacja; 47 punktów z „Co oceniamy”,
+  artykulacja 9 grup głosek z `@pozycje`) oraz `backend/src/ankyloglossia_template.txt` – „Karta badania – diagnoza
+  ankyloglosji” (12 prób z „Jak wykonać” i „Na co zwracamy uwagę”). Jedno pytanie w wierszu, `## ` = nagłówek sekcji,
+  `# ` = komentarz.
   Nagłówki w tabeli – wiersz sekcji bez pola odpowiedzi i nagrywania, numeracja pytań pomija sekcje. „Wczytaj aktualny
   szablon” (`POST …/interview/reset`) zastępuje pytania (usuwa odpowiedzi i nagrania; zatwierdzona migawka zostaje do
   ponownego zatwierdzenia).
-  **Do LLM trafia wyłącznie zatwierdzona migawka**: `describe_patient(patient, interview)` dopisuje sekcję
+  Backend (`api/interview.py`): `FORMS` (etykieta, id szablonu 1/2, plik), parametr `form` w każdym endpoincie wywiadu
+  i szablonu (422 dla nieznanego); pytania formularza ≠ `interview` oznaczone w `patient_interview_item_forms`
+  (`_items` filtruje: wywiad = bez oznaczenia), stan w `patient_interview_forms`; usuwanie pytania rozpoznaje formularz
+  po pytaniu; reset dotyczy tylko danego formularza; usunięcie pacjenta czyści obie nowe tabele.
+  **Do LLM trafia wyłącznie zatwierdzona migawka** (każdego formularza osobno; pytanie skrócone do tytułu – bez podpowiedzi,
+  `question_title`; po wywiadzie sekcja `[Karta badania – diagnoza ankyloglosji]` z jej odpowiedziami): `describe_patient(patient, interview)` dopisuje sekcję
   „Wywiad z pacjentem / opiekunem (zatwierdzony przez lekarza):” z parami `- pytanie / Odpowiedź: …` (tylko pytania
   z odpowiedzią), pogrupowanymi nagłówkami `[sekcja]` (tylko sekcje z co najmniej jedną odpowiedzią), dzięki czemu wywiad trafia też do kroku przepisywania zapytania; `PATIENT_RULES` (doklejane do
   `ANSWER_SYSTEM` tylko, gdy jest kontekst pacjenta) każą odnosić zalecenia do wywiadu i cytować fakty o pacjencie jako
@@ -289,11 +309,11 @@ Konto niepowiązane z kartą → komunikat 404.
   w kolorze tła między segmentami, stonowana siatka 1 px, skrócone liczby na osi (tys./mln), tooltipy pl-PL, zarządzanie kontami:
   tworzenie (`POST /api/admin/users` z rolą), zmiana roli z listy (opcje z `[selected]`, nie `[value]` na select –
   inaczej przeglądarka pokazuje zawsze pierwszą opcję), nowe hasło, blokowanie, usuwanie; własnego konta nie można zmienić.
-- **Szablon wywiadu** (komponent `interview-template` na dole `/admin`): textarea „jedno pytanie w wierszu”,
+- **Szablon wywiadu** (komponent `interview-template` na dole `/admin`): przełącznik „Wywiad” | „Diagnoza ankyloglosji”
+  (`?form=`, ostrzeżenie przy niezapisanych zmianach), opis formatu `Tytuł | Co oceniamy: …` i `| @pozycje`; textarea „jedno pytanie w wierszu”,
   „Zapisz szablon” (`PUT /api/admin/interview-template` – białe znaki scalane, puste wiersze pomijane),
-  „Przywróć domyślny” (`DELETE`). Domyślnie 16 pytań wywiadu logopedycznego (powód zgłoszenia, przebieg trudności,
-  ciąża i poród, rozwój ruchowy i mowy, karmienie, oddychanie, słuch, choroby/operacje, zgryz i nawyki, wywiad rodzinny,
-  środowisko językowe, lateralizacja, dotychczasowa terapia, funkcjonowanie emocjonalno-społeczne, oczekiwania).
+  „Przywróć domyślny” (`DELETE`) – wraca do pliku szablonu danego formularza (`interview_template.txt` /
+  `ankyloglossia_template.txt`, opis wyżej przy formularzach pacjenta).
 - **`/admin/testy` – Testy jakości (goldset)** (`src/goldset.py`, `api/goldset.py`, `goldset.component.ts`):
   import goldsetu z wklejonego tekstu (`parse_goldset`: najpierw pytania „N. Tytuł” + treść, potem druga numeracja od 1 albo
   nagłówki „adN.” = odpowiedzi wzorcowe (w trybie „adN.” tylko takie wiersze są nagłówkami; wstęp przed odpowiedziami
@@ -485,7 +505,7 @@ w jednym rekordzie, a szablony z zamkniętą listą ćwiczeń dostaną dokładne
   `GET|POST /portal/events`, `PUT|DELETE /portal/events/{eid}` (pacjent)
 - `plan`: `POST /patients/{id}/plan/suggest` (propozycja kroku), `GET /patients/{id}/plan`, `PUT /patients/{id}/plan/settings`, `POST /patients/{id}/plan/steps`,
   `PUT|DELETE /patients/{id}/plan/steps/{sid}`, `PUT /patients/{id}/plan/order`
-- `interview`: `GET|PUT /patients/{id}/interview`, `POST /patients/{id}/interview/approve`, `POST /patients/{id}/interview/reset`,
+- `interview` (wszystkie z opcjonalnym `?form=interview|ankyloglossia`, poza audio i usuwaniem pytania): `GET|PUT /patients/{id}/interview`, `POST /patients/{id}/interview/approve`, `POST /patients/{id}/interview/reset`,
   `POST /patients/{id}/interview/items`, `DELETE /patients/{id}/interview/items/{iid}`,
   `GET|PUT|DELETE /patients/{id}/interview/items/{iid}/audio` (PUT multipart `audio`, walidacja jak `/audio/transcribe`
   – wspólna funkcja `read_audio_upload`); `GET|PUT|DELETE /admin/interview-template` (tylko admin)
@@ -564,6 +584,11 @@ powiązanie z planem), plan działania (CRUD, kolejność, izolacja, kontekst LL
 
 Nowe wpisy dopisuj na górze listy (data, co i dlaczego).
 
+- **2026-11-20** – Nowy „Uniwersalny wywiad i badanie logopedyczne” (47 punktów, sekcje A–G, podpowiedzi „Co oceniamy”,
+  artykulacja w nagłosie/śródgłosie/wygłosie) i drugi formularz „Karta badania – diagnoza ankyloglosji” (12 prób) –
+  przełącznik nad kartą z animacją przejścia; osobne szablony, zatwierdzanie i kontekst LLM. Nowe tabele
+  `patient_interview_item_forms`, `patient_interview_forms`. Istniejące wywiady zostają przy starych pytaniach
+  („Wczytaj aktualny szablon”); jeśli administrator zapisał własny szablon, nowy domyślny wymaga „Przywróć domyślny”.
 - **2026-11-18** – PDF: OCR tekstu z osadzonych ilustracji i naprawa sklejonych słów. Dokument „Wędzidełko” (slajdy)
   miał zestaw ćwiczeń przed zabiegiem jako obrazek – pypdf czyta tylko warstwę tekstową, więc ćwiczeń nie było w indeksie,
   a „Przetwórz ponownie” nie uruchamiało OCR dla PDF. Istniejące PDF-y trzeba przetworzyć ponownie.

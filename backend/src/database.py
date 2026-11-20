@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, LargeBinary, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import Field, SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -194,6 +194,39 @@ class InterviewItem(SQLModel, table=True):
     position: int = Field(default=0)
     question: str = Field(sa_column=Column(Text, nullable=False))
     answer: str = Field(default="", sa_column=Column(Text, nullable=False))
+    created_at: datetime = _ts()
+    updated_at: datetime = _ts()
+
+
+class InterviewItemForm(SQLModel, table=True):
+    """Formularz, do którego należy pytanie (np. „ankyloglossia”). Brak wiersza = wywiad
+    uniwersalny („interview”) – osobna tabela zamiast kolumny (create_all bez migracji)."""
+
+    __tablename__ = "patient_interview_item_forms"
+
+    item_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("patient_interview_items.id"), primary_key=True)
+    )
+    patient_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("patients.id"), index=True, nullable=False)
+    )
+    form: str = Field(max_length=30, index=True)
+
+
+class PatientInterviewForm(SQLModel, table=True):
+    """Stan dodatkowego formularza (np. diagnoza ankyloglosji) – odpowiednik PatientInterview
+    (te same pola: status, migawka zatwierdzenia), klucz: pacjent + formularz."""
+
+    __tablename__ = "patient_interview_forms"
+
+    patient_id: int = Field(sa_column=Column(Integer, ForeignKey("patients.id"), primary_key=True))
+    form: str = Field(sa_column=Column(String(30), primary_key=True))
+    user_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    )
+    status: str = Field(default="draft", max_length=20)
+    approved_items: list | None = Field(default=None, sa_column=Column(JSON))
+    approved_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     created_at: datetime = _ts()
     updated_at: datetime = _ts()
 
